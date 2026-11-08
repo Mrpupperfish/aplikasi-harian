@@ -379,75 +379,75 @@ const GlobalLightThemeStyles = () => (
         );
         border-radius: 22px;
         box-shadow:
-      /* Keep subtle, lightweight frosted blur on mobile without heavy GPU lag */
+          0 14px 32px -8px rgba(15, 27, 51, 0.12),
+          inset 0 1.5px 2px rgba(255, 255, 255, 0.98);
+        transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+      }
+
+      .sticky-glass-nav,
+      .navos-chat-bubble,
+      .frosted-input,
+      .btn-pill-secondary {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background-color: rgba(255, 255, 255, 0.96) !important;
+      }
+
+      .hero-scroll-layer {
+        filter: none !important;
+      }
+
+      /* Eliminate all blur filters & shorten duration on mobile */
       .initial-boot-splash {
-        backdrop-filter: blur(8px) !important;
-        -webkit-backdrop-filter: blur(8px) !important;
-        background: linear-gradient(180deg, rgba(232, 241, 255, 0.90) 0%, rgba(244, 248, 255, 0.92) 100%);
-        animation: splashCurtainOutMobile 0.30s cubic-bezier(0.22, 1, 0.36, 1) 0.22s forwards;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        filter: none !important;
+        background: linear-gradient(180deg, #E8F1FF 0%, #F4F8FF 100%);
+        animation: splashCurtainOutMobile 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
       }
 
       .initial-boot-logo-pill {
-        animation: splashLogoPopMobile 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        filter: none !important;
+        animation: splashLogoPopMobile 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
 
       @keyframes splashLogoPopMobile {
-        from { opacity: 0; filter: blur(4px); transform: translate3d(0, 10px, 0) scale(0.96); }
-        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0) scale(1); }
+        from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.96); }
+        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
       }
 
       @keyframes splashCurtainOutMobile {
-        from { opacity: 1; filter: blur(0px); transform: scale(1); }
-        to { opacity: 0; filter: blur(6px); transform: scale(1.015); visibility: hidden; }
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0; transform: scale(1.015); visibility: hidden; }
       }
 
       .initial-nav-drop {
-        animation: initialNavSlideDownMobile 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.14s forwards;
+        filter: none !important;
+        animation: initialNavSlideDownMobile 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards;
       }
 
       @keyframes initialNavSlideDownMobile {
-        from { opacity: 0; filter: blur(3px); transform: translate3d(0, -14px, 0); }
-        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0); }
+        from { opacity: 0; transform: translate3d(0, -14px, 0); }
+        to { opacity: 1; transform: translate3d(0, 0, 0); }
       }
 
       .initial-hero-item,
       .initial-role-card-enter {
-        animation: initialFastRiseMobile 0.38s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--enter-delay, var(--card-enter-delay, 0.2s)) * 0.42) forwards;
+        filter: none !important;
+        animation: initialFastRiseMobile 0.35s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--enter-delay, var(--card-enter-delay, 0.2s)) * 0.4) forwards;
       }
 
       @keyframes initialFastRiseMobile {
-        from { opacity: 0; filter: blur(5px); transform: translate3d(0, 16px, 0) scale(0.985); }
-        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0) scale(1); }
+        from { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.985); }
+        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
       }
 
       .view-transition-enter {
-        animation: viewEnterMobile 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        filter: none !important;
+        animation: viewEnterMobile 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
-
-      @keyframes viewEnterMobile {
-        from { opacity: 0; filter: blur(4px); transform: translate3d(0, 10px, 0); }
-        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0); }
-      }
-
-      .scroll-reveal-section,
-      .scroll-reveal-card {
-        filter: blur(4px);
-        transform: translate3d(0, 22px, 0) scale(0.985);
-        transition:
-          opacity 0.36s cubic-bezier(0.22, 1, 0.36, 1),
-          filter 0.36s cubic-bezier(0.22, 1, 0.36, 1),
-          transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
-        transition-delay: calc(var(--stagger-delay, 0ms) * 0.45);
-      }
-
-      .scroll-reveal-section.is-above,
-      .scroll-reveal-card.is-above {
-        filter: blur(3px);
-        transform: translate3d(0, -18px, 0) scale(0.985);
-      }
-
-      .scroll-reveal-section.is-inview,
-      .scroll-reveal-card.is-inview {
+      to {
+        opacity: 1;
         filter: blur(0px);
         transform: translate3d(0, 0, 0) scale(1);
       }
@@ -657,72 +657,73 @@ const GlobalLightThemeStyles = () => (
 
       /* Eliminate expensive filter: blur() keyframes & shorten duration on mobile */
       .initial-boot-splash {
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        animation: splashCurtainOutMobile 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.24s forwards;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        animation: splashCurtainOutMobile 0.34s cubic-bezier(0.22, 1, 0.36, 1) 0.24s forwards;
       }
 
       .initial-boot-logo-pill {
-        animation: splashLogoPopMobile 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        animation: splashLogoPopMobile 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
 
       @keyframes splashLogoPopMobile {
-        from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.96); }
-        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+        from { opacity: 0; filter: blur(4px); transform: translate3d(0, 10px, 0) scale(0.96); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0) scale(1); }
       }
 
       @keyframes splashCurtainOutMobile {
-        from { opacity: 1; transform: scale(1); }
-        to { opacity: 0; transform: scale(1.015); visibility: hidden; }
+        from { opacity: 1; filter: blur(0px); transform: scale(1); }
+        to { opacity: 0; filter: blur(5px); transform: scale(1.015); visibility: hidden; }
       }
 
       .initial-nav-drop {
-        animation: initialNavSlideDownMobile 0.36s cubic-bezier(0.22, 1, 0.36, 1) 0.14s forwards;
+        animation: initialNavSlideDownMobile 0.38s cubic-bezier(0.22, 1, 0.36, 1) 0.14s forwards;
       }
 
       @keyframes initialNavSlideDownMobile {
-        from { opacity: 0; transform: translate3d(0, -14px, 0); }
-        to { opacity: 1; transform: translate3d(0, 0, 0); }
+        from { opacity: 0; filter: blur(3px); transform: translate3d(0, -14px, 0); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0); }
       }
 
       .initial-hero-item,
       .initial-role-card-enter {
-        animation: initialFastRiseMobile 0.42s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--enter-delay, var(--card-enter-delay, 0.24s)) * 0.45) forwards;
+        animation: initialFastRiseMobile 0.44s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--enter-delay, var(--card-enter-delay, 0.24s)) * 0.45) forwards;
       }
 
       @keyframes initialFastRiseMobile {
-        from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.98); }
-        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+        from { opacity: 0; filter: blur(5px); transform: translate3d(0, 18px, 0) scale(0.98); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0) scale(1); }
       }
 
       .view-transition-enter {
-        animation: viewEnterMobile 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        animation: viewEnterMobile 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
 
       @keyframes viewEnterMobile {
-        from { opacity: 0; transform: translate3d(0, 10px, 0); }
-        to { opacity: 1; transform: translate3d(0, 0, 0); }
+        from { opacity: 0; filter: blur(3px); transform: translate3d(0, 10px, 0); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0); }
       }
 
       .scroll-reveal-section,
       .scroll-reveal-card {
-        filter: none !important;
+        filter: blur(3.5px);
         transform: translate3d(0, 22px, 0) scale(0.985);
         transition:
-          opacity 0.36s cubic-bezier(0.22, 1, 0.36, 1),
-          transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+          opacity 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+          filter 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+          transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
         transition-delay: calc(var(--stagger-delay, 0ms) * 0.45);
       }
 
       .scroll-reveal-section.is-above,
       .scroll-reveal-card.is-above {
-        filter: none !important;
+        filter: blur(2.5px);
         transform: translate3d(0, -18px, 0) scale(0.985);
       }
 
       .scroll-reveal-section.is-inview,
       .scroll-reveal-card.is-inview {
-        filter: none !important;
+        filter: blur(0px);
         transform: translate3d(0, 0, 0) scale(1);
       }
     }
@@ -1376,13 +1377,13 @@ export default function App() {
 
       const isMobileViewport = window.innerWidth <= 768;
 
-      // Apply smooth GPU parallax on Landing Hero elements (skip expensive per-frame blur on mobile)
+      // Apply smooth GPU parallax on Landing Hero elements (lighter blur on mobile)
       if (heroHeadlineRef.current) {
         if (isMobileViewport) {
           const progress = Math.min(1, Math.max(0, y / 420));
           heroHeadlineRef.current.style.transform = `translate3d(0, ${(-y * 0.08).toFixed(1)}px, 0)`;
           heroHeadlineRef.current.style.opacity = Math.max(0.2, 1 - progress * 0.75).toFixed(3);
-          heroHeadlineRef.current.style.filter = 'none';
+          heroHeadlineRef.current.style.filter = `blur(${(progress * 2.2).toFixed(1)}px)`;
         } else {
           const progress = Math.min(1, Math.max(0, y / 500));
           const translateY = -y * 0.16;
@@ -1397,9 +1398,10 @@ export default function App() {
 
       if (heroMockupRef.current) {
         if (isMobileViewport) {
-          heroMockupRef.current.style.transform = 'translate3d(0, 0, 0)';
-          heroMockupRef.current.style.opacity = '1';
-          heroMockupRef.current.style.filter = 'none';
+          const progress = Math.min(1, Math.max(0, y / 480));
+          heroMockupRef.current.style.transform = `translate3d(0, ${(-progress * 12).toFixed(1)}px, 0)`;
+          heroMockupRef.current.style.opacity = Math.max(0.3, 1 - progress * 0.6).toFixed(3);
+          heroMockupRef.current.style.filter = `blur(${(progress * 1.8).toFixed(1)}px)`;
         } else {
           const progress = Math.min(1, Math.max(0, y / 560));
           const liftY = -progress * 28;
