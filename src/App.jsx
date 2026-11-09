@@ -49,8 +49,8 @@ const GlobalLightThemeStyles = () => (
       --primary: #1D6FE8;
       --primary-dark: #1555B8;
       --primary-light: rgba(220, 232, 253, 0.75);
-      --text: #0F1B33;
-      --text-muted: #526382;
+      --text: #091326;
+      --text-muted: #334463;
       --gradient-accent: linear-gradient(92deg, #1E90FF 0%, #246BFD 52%, #3949FF 100%);
       --shadow-card:
         0 24px 64px rgba(32, 84, 198, 0.10),
@@ -84,6 +84,7 @@ const GlobalLightThemeStyles = () => (
       background-color: var(--bg);
       color: var(--text-muted);
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-weight: 500;
       -webkit-font-smoothing: antialiased;
       overflow: visible;
     }
@@ -95,8 +96,12 @@ const GlobalLightThemeStyles = () => (
 
     h1, h2, h3, h4, .heading-tight {
       color: var(--text);
-      font-weight: 600;
-      letter-spacing: -0.035em;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    p, span, label, input, select, textarea, button {
+      letter-spacing: -0.01em;
     }
 
     .font-mono-metric {
@@ -272,7 +277,7 @@ const GlobalLightThemeStyles = () => (
       background: var(--gradient-accent);
       color: #FFFFFF;
       border-radius: 14px;
-      font-weight: 600;
+      font-weight: 700;
       border: 1px solid rgba(255, 255, 255, 0.28);
       box-shadow: var(--shadow-btn), inset 0 1px 1px rgba(255, 255, 255, 0.35);
       transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, opacity 0.22s ease;
@@ -292,7 +297,7 @@ const GlobalLightThemeStyles = () => (
       border: 1.5px solid rgba(255, 255, 255, 0.92);
       outline: 1px solid rgba(190, 212, 250, 0.45);
       border-radius: 14px;
-      font-weight: 600;
+      font-weight: 700;
       box-shadow: 0 8px 24px rgba(32, 84, 198, 0.06);
       transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, background-color 0.22s ease, color 0.22s ease;
       will-change: transform;
@@ -308,7 +313,7 @@ const GlobalLightThemeStyles = () => (
       background: linear-gradient(135deg, #16284C 0%, #0F1B33 100%);
       color: #FFFFFF;
       border-radius: 14px;
-      font-weight: 600;
+      font-weight: 700;
       border: 1px solid rgba(255, 255, 255, 0.18);
       box-shadow: 0 12px 28px rgba(15, 27, 51, 0.18);
       transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.22s ease;
@@ -333,7 +338,7 @@ const GlobalLightThemeStyles = () => (
     .nav-link-animated {
       position: relative;
       color: var(--text-muted);
-      font-weight: 500;
+      font-weight: 600;
       transition: color 0.2s ease;
     }
 
