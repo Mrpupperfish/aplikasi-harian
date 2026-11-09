@@ -5019,10 +5019,16 @@ export default function App() {
             </div>
 
             {/* Bottom Action Bar */}
-            <div className="px-6 py-4 bg-white border-t border-[#E4EAF5] flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs text-[#526382]">
-                Dengan menekan tombol setuju, kotak persetujuan S&amp;K otomatis tercentang.
-              </span>
+            <div
+              className={`px-6 py-4 bg-white border-t border-[#E4EAF5] flex flex-wrap items-center gap-3 ${
+                activeView === 'register' ? 'justify-between' : 'justify-end'
+              }`}
+            >
+              {activeView === 'register' && (
+                <span className="text-xs text-[#526382]">
+                  Dengan menekan tombol setuju, kotak persetujuan S&amp;K otomatis tercentang.
+                </span>
+              )}
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
@@ -5031,19 +5037,21 @@ export default function App() {
                 >
                   Tutup Pratinjau PDF
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAgreeServiceFee(true);
-                    setShowTermsServiceModal(false);
-                    triggerToast(
-                      'Anda telah menyetujui dokumen PDF Syarat & Ketentuan serta Service Charge 10%.'
-                    );
-                  }}
-                  className="btn-pill-primary px-5 py-2 text-xs sm:text-sm"
-                >
-                  Saya Setuju dengan Isi PDF S&amp;K
-                </button>
+                {activeView === 'register' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAgreeServiceFee(true);
+                      setShowTermsServiceModal(false);
+                      triggerToast(
+                        'Anda telah menyetujui dokumen PDF Syarat & Ketentuan serta Service Charge 10%.'
+                      );
+                    }}
+                    className="btn-pill-primary px-5 py-2 text-xs sm:text-sm"
+                  >
+                    Saya Setuju dengan Isi PDF S&amp;K
+                  </button>
+                )}
               </div>
             </div>
           </div>
