@@ -1310,6 +1310,7 @@ export default function App() {
   const [applications, setApplications] = useState(INITIAL_APPLICATIONS);
   const [candidates, setCandidates] = useState(INITIAL_CANDIDATES);
   const [selectedJobId, setSelectedJobId] = useState(INITIAL_JOBS[0].id);
+  const [jobDetailModalId, setJobDetailModalId] = useState(null);
   const [workerSubTab, setWorkerSubTab] = useState('explore'); // 'explore' | 'applications'
   const [hrdSubTab, setHrdSubTab] = useState('jobs'); // 'jobs' | 'mfep' | 'escrow'
   const [hrdWalletBalance, setHrdWalletBalance] = useState(25000000);
@@ -3821,9 +3822,14 @@ export default function App() {
   // 12. RENDER VIEW 4: PORTAL PEKERJA HARIAN (UC-04, UC-05, UC-06, UC-07, UC-12, UC-13)
   // ============================================================================
   const renderWorkerPortalView = () => {
-    const alreadyApplied = applications.some(
-      (a) => a.jobId === selectedJob.id && a.status !== 'Dibatalkan'
-    );
+    const modalJob = jobDetailModalId
+      ? jobs.find((j) => j.id === jobDetailModalId) || null
+      : null;
+    const alreadyAppliedModal = modalJob
+      ? applications.some(
+          (a) => a.jobId === modalJob.id && a.status !== 'Dibatalkan'
+        )
+      : false;
 
     return (
       <section
@@ -4051,17 +4057,20 @@ export default function App() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredJobs.map((job) => {
-                      const isSelected = job.id === selectedJob.id;
+                      const isSelected = job.id === jobDetailModalId;
                       return (
                         <div
                           key={job.id}
-                          onClick={() => setSelectedJobId(job.id)}
-                          className="harian-surface-card p-5 cursor-pointer"
+                          onClick={() => {
+                            setSelectedJobId(job.id);
+                            setJobDetailModalId(job.id);
+                          }}
+                          className="harian-surface-card p-5 cursor-pointer hover:border-[#1D6FE8] transition"
                           style={{
                             borderColor: isSelected
                               ? 'var(--primary)'
                               : 'var(--border)',
-                            borderWidth: isSelected ? '2px' : '1px'
+                            borderWidth: isSelected ? '2px' : '1.5px'
                           }}
                         >
                           <div className="flex items-center justify-between gap-2 mb-2">
@@ -4103,154 +4112,200 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Selected Job Detail Box (UC-06 & FR-004 / FR-005 / FR-009) */}
-                {selectedJob && (
-                  <div className="harian-surface-card p-6 sm:p-8">
+                {/* Popup Window Modal Detail Informasi Lowongan & Lamar */}
+                {modalJob && (
+                  <div
+                    onClick={() => setJobDetailModalId(null)}
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{
+                      backgroundColor: 'rgba(15, 27, 51, 0.48)',
+                      backdropFilter: 'blur(6px)'
+                    }}
+                  >
                     <div
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-5 border-b"
-                      style={{ borderColor: 'var(--border)' }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="harian-surface-card max-w-xl w-full p-6 sm:p-7 max-h-[90vh] overflow-y-auto view-transition-enter"
                     >
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                          <span
-                            className="text-xs font-semibold px-3 py-0.5 rounded-full"
-                            style={{
-                              backgroundColor: 'var(--primary-light)',
-                              color: 'var(--primary)'
-                            }}
-                          >
-                            {selectedJob.category}
-                          </span>
-                          <span className="text-xs font-medium">
-                            Integritas Perusahaan:{' '}
-                            <strong style={{ color: 'var(--text)' }}>
-                              {selectedJob.integrityScore}
-                            </strong>
-                          </span>
+                      <div
+                        className="flex items-start justify-between gap-3 pb-4 mb-4 border-b"
+                        style={{ borderColor: 'var(--border)' }}
+                      >
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                            <span
+                              className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: 'var(--primary-light)',
+                                color: 'var(--primary)'
+                              }}
+                            >
+                              {modalJob.category}
+                            </span>
+                            <span className="text-[11px] font-medium">
+                              Integritas:{' '}
+                              <strong style={{ color: 'var(--text)' }}>
+                                {modalJob.integrityScore}
+                              </strong>
+                            </span>
+                          </div>
+                          <h3 className="heading-tight text-xl sm:text-2xl">
+                            {modalJob.title}
+                          </h3>
+                          <p className="text-xs sm:text-sm mt-0.5">
+                            {modalJob.company} &bull; Lokasi:{' '}
+                            {modalJob.location}
+                          </p>
                         </div>
-                        <h3 className="heading-tight text-2xl">
-                          {selectedJob.title}
-                        </h3>
-                        <p className="text-xs sm:text-sm">
-                          {selectedJob.company} &bull; Lokasi:{' '}
-                          {selectedJob.location}
+
+                        <button
+                          type="button"
+                          onClick={() => setJobDetailModalId(null)}
+                          className="p-2 rounded-full bg-white/70 hover:bg-white text-[#526382] hover:text-[#091326] transition shrink-0"
+                          aria-label="Tutup detail lowongan"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div
+                        className="p-3.5 rounded-2xl border mb-4 flex items-center justify-between"
+                        style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.72)',
+                          borderColor: 'var(--border)'
+                        }}
+                      >
+                        <div>
+                          <div className="text-[11px]">Upah Harian</div>
+                          <div className="text-lg sm:text-xl font-bold font-mono-metric text-accent-primary">
+                            {formatRupiah(modalJob.rate)}{' '}
+                            <span className="text-xs font-normal text-[#5B6B88]">
+                              / hari
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[11px]">
+                            Bersih Diterima H+2 (Fee 10%)
+                          </div>
+                          <div
+                            className="text-sm sm:text-base font-bold font-mono-metric"
+                            style={{ color: 'var(--text)' }}
+                          >
+                            {formatRupiah(modalJob.rate * 0.9)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2.5 mb-4">
+                        <div
+                          className="p-3 rounded-2xl border"
+                          style={{
+                            backgroundColor: 'var(--bg-soft)',
+                            borderColor: 'var(--border)'
+                          }}
+                        >
+                          <div className="text-[10px]">Jadwal Shift</div>
+                          <div
+                            className="text-xs sm:text-sm font-semibold font-mono-metric mt-0.5"
+                            style={{ color: 'var(--text)' }}
+                          >
+                            {modalJob.workTime}
+                          </div>
+                        </div>
+                        <div
+                          className="p-3 rounded-2xl border"
+                          style={{
+                            backgroundColor: 'var(--bg-soft)',
+                            borderColor: 'var(--border)'
+                          }}
+                        >
+                          <div className="text-[10px]">Kuota &amp; Pelamar</div>
+                          <div
+                            className="text-xs sm:text-sm font-semibold font-mono-metric mt-0.5"
+                            style={{ color: 'var(--text)' }}
+                          >
+                            {modalJob.applicantsCount} / {modalJob.quota} Kuota
+                          </div>
+                        </div>
+                        <div
+                          className="p-3 rounded-2xl border"
+                          style={{
+                            backgroundColor: 'var(--bg-soft)',
+                            borderColor: 'var(--border)'
+                          }}
+                        >
+                          <div className="text-[10px]">Escrow Terkunci</div>
+                          <div className="text-xs sm:text-sm font-semibold font-mono-metric text-accent-primary mt-0.5">
+                            {formatRupiah(modalJob.escrowHeld)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-xs leading-relaxed mb-5">
+                        <p>
+                          <strong style={{ color: 'var(--text)' }}>
+                            Deskripsi Tugas:
+                          </strong>{' '}
+                          {modalJob.description}
+                        </p>
+                        <p>
+                          <strong style={{ color: 'var(--text)' }}>
+                            Perlengkapan / Dresscode Wajib:
+                          </strong>{' '}
+                          {modalJob.dresscode}
+                        </p>
+                        <p>
+                          <strong style={{ color: 'var(--text)' }}>
+                            Kontak Penanggung Jawab (PIC):
+                          </strong>{' '}
+                          {modalJob.picName} ({modalJob.picPhone})
                         </p>
                       </div>
 
-                      <div className="text-left sm:text-right">
-                        <div className="text-2xl font-bold font-mono-metric text-accent-primary">
-                          {formatRupiah(selectedJob.rate)}{' '}
-                          <span className="text-xs font-normal text-[#5B6B88]">
-                            / hari
-                          </span>
-                        </div>
-                        <div className="text-xs">
-                          Bersih diterima H+2:{' '}
-                          <strong
-                            className="font-mono-metric"
-                            style={{ color: 'var(--text)' }}
-                          >
-                            {formatRupiah(selectedJob.rate * 0.9)}
-                          </strong>{' '}
-                          (Fee 10%)
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-5">
                       <div
-                        className="p-3.5 rounded-2xl border"
-                        style={{
-                          backgroundColor: 'var(--bg-soft)',
-                          borderColor: 'var(--border)'
-                        }}
-                      >
-                        <div className="text-[11px]">Jadwal Shift</div>
-                        <div
-                          className="text-sm font-semibold font-mono-metric"
-                          style={{ color: 'var(--text)' }}
-                        >
-                          {selectedJob.workTime}
-                        </div>
-                      </div>
-                      <div
-                        className="p-3.5 rounded-2xl border"
-                        style={{
-                          backgroundColor: 'var(--bg-soft)',
-                          borderColor: 'var(--border)'
-                        }}
-                      >
-                        <div className="text-[11px]">Kuota &amp; Pelamar</div>
-                        <div
-                          className="text-sm font-semibold font-mono-metric"
-                          style={{ color: 'var(--text)' }}
-                        >
-                          {selectedJob.applicantsCount} Pelamar /{' '}
-                          {selectedJob.quota} Kuota
-                        </div>
-                      </div>
-                      <div
-                        className="p-3.5 rounded-2xl border"
-                        style={{
-                          backgroundColor: 'var(--bg-soft)',
-                          borderColor: 'var(--border)'
-                        }}
+                        className="pt-4 border-t space-y-3"
+                        style={{ borderColor: 'var(--border)' }}
                       >
                         <div className="text-[11px]">
-                          Dana Escrow Terkunci di Awal
+                          Berkas Terlampir:{' '}
+                          <strong style={{ color: 'var(--text)' }}>
+                            KTP_{workerProfile.fullName.replace(/\s+/g, '')}
+                            _Verified.pdf (Siap Kirim)
+                          </strong>
                         </div>
-                        <div className="text-sm font-semibold font-mono-metric text-accent-primary">
-                          {formatRupiah(selectedJob.escrowHeld)}
+                        <div className="flex flex-wrap items-center justify-end gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setJobDetailModalId(null)}
+                            className="btn-pill-secondary px-4 py-2.5 text-xs"
+                          >
+                            Tutup
+                          </button>
+                          {alreadyAppliedModal ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setJobDetailModalId(null);
+                                setWorkerSubTab('applications');
+                              }}
+                              className="btn-pill-primary px-5 py-2.5 text-xs"
+                            >
+                              Sudah Dilamar &bull; Pantau Status &rarr;
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleApplyToJob(modalJob);
+                                setJobDetailModalId(null);
+                              }}
+                              className="btn-pill-primary px-6 py-2.5 text-xs"
+                            >
+                              Lamar Sekarang &amp; Kirim Dokumen
+                            </button>
+                          )}
                         </div>
                       </div>
-                    </div>
-
-                    <div className="space-y-2 text-xs sm:text-sm leading-relaxed mb-6">
-                      <p>
-                        <strong style={{ color: 'var(--text)' }}>
-                          Deskripsi Tugas:
-                        </strong>{' '}
-                        {selectedJob.description}
-                      </p>
-                      <p>
-                        <strong style={{ color: 'var(--text)' }}>
-                          Perlengkapan / Dresscode Wajib:
-                        </strong>{' '}
-                        {selectedJob.dresscode}
-                      </p>
-                      <p>
-                        <strong style={{ color: 'var(--text)' }}>
-                          Kontak Penanggung Jawab (PIC):
-                        </strong>{' '}
-                        {selectedJob.picName} ({selectedJob.picPhone})
-                      </p>
-                    </div>
-
-                    <div
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t"
-                      style={{ borderColor: 'var(--border)' }}
-                    >
-                      <div className="text-xs">
-                        Unggah Berkas Syarat:{' '}
-                        <strong style={{ color: 'var(--text)' }}>
-                          KTP_BudiSantoso_Verified.pdf (Siap Kirim)
-                        </strong>
-                      </div>
-                      {alreadyApplied ? (
-                        <button
-                          onClick={() => setWorkerSubTab('applications')}
-                          className="btn-pill-secondary px-6 py-3 text-xs sm:text-sm"
-                        >
-                          Sudah Dilamar &bull; Pantau Status Real-Time &rarr;
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleApplyToJob(selectedJob)}
-                          className="btn-pill-primary px-7 py-3 text-xs sm:text-sm"
-                        >
-                          Lamar Sekarang &amp; Unggah Dokumen
-                        </button>
-                      )}
                     </div>
                   </div>
                 )}
