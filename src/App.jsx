@@ -4208,6 +4208,18 @@ export default function App() {
                           <div
                             className="text-xs sm:text-sm font-semibold font-mono-metric mt-0.5"
                             style={{ color: 'var(--text)' }}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div
+                          className="p-3 rounded-2xl border"
+                          style={{
+                            backgroundColor: 'var(--bg-soft)',
+                            borderColor: 'var(--border)'
+                          }}
+                        >
+                          <div className="text-[10px]">Jadwal Shift</div>
+                          <div
+                            className="text-xs sm:text-sm font-semibold font-mono-metric mt-0.5"
+                            style={{ color: 'var(--text)' }}
                           >
                             {modalJob.workTime}
                           </div>
@@ -4225,18 +4237,6 @@ export default function App() {
                             style={{ color: 'var(--text)' }}
                           >
                             {modalJob.applicantsCount} / {modalJob.quota} Kuota
-                          </div>
-                        </div>
-                        <div
-                          className="p-3 rounded-2xl border"
-                          style={{
-                            backgroundColor: 'var(--bg-soft)',
-                            borderColor: 'var(--border)'
-                          }}
-                        >
-                          <div className="text-[10px]">Escrow Terkunci</div>
-                          <div className="text-xs sm:text-sm font-semibold font-mono-metric text-accent-primary mt-0.5">
-                            {formatRupiah(modalJob.escrowHeld)}
                           </div>
                         </div>
                       </div>
