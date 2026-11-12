@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
 import {
   Search,
   MapPin,
@@ -28,7 +28,15 @@ import {
   RefreshCw,
   FileSpreadsheet,
   MessageSquareOff,
-  HelpCircle
+  HelpCircle,
+  Pencil,
+  Trash2,
+  Upload,
+  Eye,
+  Lock,
+  Unlock,
+  CreditCard,
+  Copy
 } from 'lucide-react';
 
 // ============================================================================
@@ -732,6 +740,51 @@ const GlobalLightThemeStyles = () => (
       }
     }
 
+    /* Native Modal Dialog & Accessible Form Utilities (Modern Web Guidance) */
+    dialog.harian-native-dialog {
+      border: none;
+      padding: 0;
+      background: transparent;
+      max-width: min(94vw, 44rem);
+      max-height: 92vh;
+      width: 100%;
+      margin: auto;
+      color: var(--text);
+    }
+
+    dialog.harian-native-dialog[open] {
+      display: block;
+    }
+
+    dialog.harian-native-dialog:modal {
+      overscroll-behavior: contain;
+    }
+
+    dialog.harian-native-dialog::backdrop {
+      background: rgba(15, 27, 51, 0.48);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
+
+    .visually-hidden:where(:not(:focus-within, :active)) {
+      position: absolute !important;
+      clip-path: inset(50%) !important;
+      overflow: hidden !important;
+      width: 1px !important;
+      height: 1px !important;
+      margin: -1px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      white-space: nowrap !important;
+    }
+
+    :is(input, select, textarea):is(:user-invalid, .field-invalid) {
+      border-color: #DC2626 !important;
+      background-color: rgba(254, 242, 242, 0.9) !important;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, ::before, ::after {
         animation-duration: 0.01ms !important;
@@ -911,8 +964,209 @@ const HarianLogo = ({ size = 'md' }) => {
 };
 
 // ============================================================================
-// 3. INITIAL RKPL APPLICATION DATA
+// 3. SPRINT 3 PERSISTENCE LAYER, FILE HELPERS, NATIVE DIALOG & INITIAL DATA
 // ============================================================================
+const HARIAN_DB_STORAGE_KEY = 'harian_sprint3_db_v1';
+const RUNTIME_LARGE_FILE_CACHE = new Map();
+const ALLOWED_DOC_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+const MAX_DOC_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+const formatFileSize = (bytes) => {
+  const num = Number(bytes || 0);
+  if (num < 1024) return `${num} B`;
+  if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+  return `${(num / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const createSeedDoc = (id, docType, fileName, fileSize, mimeType = 'application/pdf') => ({
+  id,
+  docType,
+  fileName,
+  fileSize,
+  mimeType,
+  uploadedAt: 'Terverifikasi Sistem',
+  dataUrl: null
+});
+
+const buildGeneratedDocumentHtml = (doc, ownerName = 'Kandidat Harian') => {
+  const safeOwner = String(ownerName || 'Kandidat Harian').replace(/[<>&"]/g, '');
+  const safeName = String(doc?.fileName || 'Dokumen.pdf').replace(/[<>&"]/g, '');
+  const safeType = String(doc?.docType || 'Dokumen Persyaratan').replace(/[<>&"]/g, '');
+  return [
+    '<!doctype html><html lang="id"><head><meta charset="utf-8"><title>' + safeName + '</title>',
+    '<style>body{font-family:Inter,Arial,sans-serif;background:#F3F7FF;color:#091326;margin:0;padding:28px}',
+    '.sheet{max-width:640px;margin:0 auto;background:#fff;border:1px solid #CBDDFC;border-radius:16px;padding:28px;box-shadow:0 12px 32px rgba(29,111,232,0.08)}',
+    '.badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#DCE8FD;color:#1D6FE8;font-size:11px;font-weight:700}',
+    'h1{font-size:18px;margin:12px 0 4px}p,li{font-size:13px;line-height:1.6;color:#334463}',
+    '.meta{margin-top:16px;padding:14px;border-radius:12px;background:#F5F8FF;border:1px solid #DCE8FD;font-size:12px}</style></head><body>',
+    '<div class="sheet"><span class="badge">BERKAS PERSYARATAN HARIAN • ' + safeType.toUpperCase() + '</span>',
+    '<h1>' + safeName + '</h1>',
+    '<p>Pemilik Berkas: <strong>' + safeOwner + '</strong></p>',
+    '<div class="meta"><div><strong>Jenis Dokumen:</strong> ' + safeType + '</div>',
+    '<div><strong>Ukuran File:</strong> ' + formatFileSize(doc?.fileSize || 184320) + '</div>',
+    '<div><strong>Status Verifikasi:</strong> Format &amp; Ukuran Valid (&le; 5 MB) — Terhubung ke Database Lamaran HRD</div></div>',
+    '<p style="margin-top:18px">Dokumen ini tersimpan di ekosistem rekrutmen <strong>har/an</strong> untuk keperluan verifikasi kelayakan kandidat oleh Instansi/HRD.</p>',
+    '</div></body></html>'
+  ].join('');
+};
+
+const validateAndReadUploadFile = (file, docType) =>
+  new Promise((resolve) => {
+    if (!file) {
+      resolve({ ok: false, error: 'Silakan pilih file dokumen terlebih dahulu.' });
+      return;
+    }
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_DOC_EXTENSIONS.includes(ext)) {
+      resolve({
+        ok: false,
+        error: `Format file "${file.name}" tidak didukung. Gunakan format PDF, JPG, PNG, DOC, atau DOCX.`
+      });
+      return;
+    }
+    if (file.size <= 0) {
+      resolve({
+        ok: false,
+        error: `File "${file.name}" kosong (0 byte). Pilih berkas yang valid.`
+      });
+      return;
+    }
+    if (file.size > MAX_DOC_SIZE_BYTES) {
+      resolve({
+        ok: false,
+        error: `Ukuran file "${file.name}" (${formatFileSize(file.size)}) melebihi batas maksimal 5 MB.`
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const resultDataUrl = typeof reader.result === 'string' ? reader.result : null;
+      if (resultDataUrl) {
+        RUNTIME_LARGE_FILE_CACHE.set(docId, resultDataUrl);
+      }
+      resolve({
+        ok: true,
+        doc: {
+          id: docId,
+          docType,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || (ext === 'pdf' ? 'application/pdf' : 'application/octet-stream'),
+          uploadedAt: new Date().toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit'
+          }) + ' WIB',
+          dataUrl: resultDataUrl
+        }
+      });
+    };
+    reader.onerror = () => {
+      resolve({
+        ok: false,
+        error: `Gagal membaca berkas "${file.name}". Silakan coba unggah ulang.`
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+
+const NativeModalDialog = ({
+  open,
+  onClose,
+  labelledBy,
+  allowOutsideClose = true,
+  maxWidthClass = 'max-w-xl',
+  children
+}) => {
+  const dialogRef = useRef(null);
+  const pressedOutsideRef = useRef(false);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open) {
+      if (!dialog.open) {
+        try {
+          dialog.showModal();
+        } catch {
+          dialog.setAttribute('open', '');
+        }
+      }
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  const isPointerOutside = (e) => {
+    const dialog = dialogRef.current;
+    if (!dialog) return false;
+    const rect = dialog.getBoundingClientRect();
+    return (
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom
+    );
+  };
+
+  if (!open) return null;
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={labelledBy}
+      {...{ closedby: allowOutsideClose ? 'any' : 'closerequest' }}
+      onClose={() => {
+        if (dialogRef.current) dialogRef.current.returnValue = '';
+        if (onClose) onClose();
+      }}
+      onPointerDown={(e) => {
+        if (!allowOutsideClose) return;
+        pressedOutsideRef.current = isPointerOutside(e);
+      }}
+      onPointerUp={(e) => {
+        if (!allowOutsideClose) return;
+        if (pressedOutsideRef.current && isPointerOutside(e)) {
+          dialogRef.current?.close();
+        }
+        pressedOutsideRef.current = false;
+      }}
+      className={`harian-native-dialog ${maxWidthClass}`}
+    >
+      <div className="harian-surface-card w-full p-6 sm:p-7 max-h-[88vh] overflow-y-auto text-left">
+        {children}
+      </div>
+    </dialog>
+  );
+};
+
+const INITIAL_WORKER_PROFILE = {
+  fullName: 'Budi Santoso',
+  phone: '+62 812-3456-7890',
+  city: 'Bekasi, Jawa Barat',
+  bio: 'Pekerja harian cekatan dengan pengalaman lebih dari 1 tahun di operasional gudang, sortir paket logistik, dan pelayanan event dengan kehadiran 100% tepat waktu.',
+  bankAccount: 'BCA - 7410889210 (Budi Santoso)',
+  experiences: [
+    {
+      id: 'exp-1',
+      role: 'Delivery Driver & Warehouse Helper',
+      company: 'Speedy Deliveries Inc',
+      period: 'Jan 2025 - Des 2025'
+    }
+  ]
+};
+
+const INITIAL_HRD_PROFILE = {
+  companyName: 'PT Karya Maju',
+  industry: 'Event & Logistik Terpadu',
+  picContact: 'Rina Wijaya (+62 811-2233-4455)',
+  location: 'Jakarta & Tangerang',
+  description:
+    'Instansi penyelenggara pameran nasional dan manajemen operasional gudang terpadu yang berkomitmen pada transparansi upah harian H+2.',
+  paymentMethod: 'Virtual Account BCA (Escrow HarianPay)'
+};
+
 const INITIAL_JOBS = [
   {
     id: 'job-1',
@@ -928,6 +1182,7 @@ const INITIAL_JOBS = [
     integrityScore: '4.9 / 5.0 (Verified Partner)',
     escrowHeld: 2625000,
     escrowStage: 'HELD',
+    status: 'OPEN',
     matchScore: 98,
     picName: 'Budi Hartono (Supervisor Shift Malam)',
     picPhone: '+62 812-8890-1122',
@@ -949,6 +1204,7 @@ const INITIAL_JOBS = [
     integrityScore: '4.8 / 5.0 (Top Employer)',
     escrowHeld: 2500000,
     escrowStage: 'HELD',
+    status: 'OPEN',
     matchScore: 92,
     picName: 'Rina Wijaya (Event Coordinator)',
     picPhone: '+62 811-9021-3344',
@@ -970,6 +1226,7 @@ const INITIAL_JOBS = [
     integrityScore: '4.9 / 5.0 (Verified Partner)',
     escrowHeld: 3700000,
     escrowStage: 'HELD',
+    status: 'OPEN',
     matchScore: 95,
     picName: 'Hendra Kusuma (Banquet Captain)',
     picPhone: '+62 813-7788-9900',
@@ -991,6 +1248,7 @@ const INITIAL_JOBS = [
     integrityScore: '4.7 / 5.0 (Verified)',
     escrowHeld: 1200000,
     escrowStage: 'PAID_H2',
+    status: 'COMPLETED',
     matchScore: 89,
     picName: 'Chef Antonius',
     picPhone: '+62 815-4433-2211',
@@ -1008,7 +1266,11 @@ const INITIAL_APPLICATIONS = [
     company: 'FastLogistics ID',
     rate: 175000,
     status: 'Pending',
-    appliedAt: 'Hari ini, 14:20 WIB'
+    appliedAt: 'Hari ini, 14:20 WIB',
+    documents: [
+      createSeedDoc('seed-app1-cv', 'CV', 'CV_Budi_Santoso_2026.pdf', 248000),
+      createSeedDoc('seed-app1-ktp', 'KTP', 'KTP_Budi_Santoso_Verified.jpg', 192000, 'image/jpeg')
+    ]
   },
   {
     id: 'app-2',
@@ -1017,52 +1279,188 @@ const INITIAL_APPLICATIONS = [
     company: 'Restoran FGH Sudirman',
     rate: 150000,
     status: 'Gaji Cair H+2',
-    appliedAt: '2 Hari Lalu'
+    appliedAt: '2 Hari Lalu',
+    documents: [
+      createSeedDoc('seed-app2-cv', 'CV', 'CV_Budi_Santoso_2026.pdf', 248000),
+      createSeedDoc('seed-app2-ktp', 'KTP', 'KTP_Budi_Santoso_Verified.jpg', 192000, 'image/jpeg')
+    ]
   }
 ];
 
 const INITIAL_CANDIDATES = [
   {
     id: 'cand-1',
+    applicationId: 'app-1',
+    jobId: 'job-1',
     name: 'Budi Santoso',
+    email: 'budisantoso@gmail.com',
+    phone: '+62 812-3456-7890',
+    city: 'Bekasi, Jawa Barat',
     roleTarget: 'Warehouse Packer (Night Shift)',
     exp: 95,
     avail: 92,
     dist: 90,
     doc: 100,
-    status: 'Pending'
+    status: 'Pending',
+    appliedAt: 'Hari ini, 14:20 WIB',
+    notes: 'Berpengalaman sortir paket & siap shift malam.',
+    documents: [
+      createSeedDoc('seed-c1-cv', 'CV', 'CV_Budi_Santoso_2026.pdf', 248000),
+      createSeedDoc('seed-c1-ktp', 'KTP', 'KTP_Budi_Santoso_Verified.jpg', 192000, 'image/jpeg'),
+      createSeedDoc('seed-c1-sk', 'Surat Pendukung', 'Paklaring_SpeedyDeliveries.pdf', 310000)
+    ]
   },
   {
     id: 'cand-2',
+    applicationId: null,
+    jobId: 'job-1',
     name: 'Gede Bagus Teguh Saka Phalguna',
+    email: 'gede.saka@gmail.com',
+    phone: '+62 813-9988-7766',
+    city: 'Bekasi Barat',
     roleTarget: 'Warehouse Packer (Night Shift)',
     exp: 89,
     avail: 90,
     dist: 86,
     doc: 95,
-    status: 'Diterima'
+    status: 'Diterima',
+    appliedAt: 'Kemarin, 19:10 WIB',
+    notes: 'Dokumen KTP & CV lengkap, fisik prima.',
+    documents: [
+      createSeedDoc('seed-c2-cv', 'CV', 'CV_Gede_Bagus_Teguh.pdf', 276000),
+      createSeedDoc('seed-c2-ktp', 'KTP', 'KTP_Gede_Bagus.pdf', 164000)
+    ]
   },
   {
     id: 'cand-3',
+    applicationId: null,
+    jobId: 'job-2',
     name: 'Ida Bagus Ngurah Sanjaya',
+    email: 'ngurah.sanjaya@gmail.com',
+    phone: '+62 817-6655-4433',
+    city: 'BSD, Tangerang Selatan',
     roleTarget: 'SPG Event Pameran',
     exp: 84,
     avail: 86,
     dist: 82,
     doc: 90,
-    status: 'Pending'
+    status: 'Pending',
+    appliedAt: 'Kemarin, 11:05 WIB',
+    notes: 'Komunikatif, pernah bertugas di pameran ICE BSD.',
+    documents: [
+      createSeedDoc('seed-c3-cv', 'CV', 'CV_Ngurah_Sanjaya_Event.pdf', 312000),
+      createSeedDoc('seed-c3-ktp', 'KTP', 'KTP_Ngurah_Sanjaya.jpg', 205000, 'image/jpeg')
+    ]
   },
   {
     id: 'cand-4',
+    applicationId: null,
+    jobId: 'job-3',
     name: 'Dwito Fajar Septianto',
+    email: 'dwito.fajar@gmail.com',
+    phone: '+62 857-2211-3399',
+    city: 'Jakarta Pusat',
     roleTarget: 'Banquet Waiter / Waitress',
     exp: 78,
     avail: 82,
     dist: 79,
     doc: 88,
-    status: 'Pending'
+    status: 'Pending',
+    appliedAt: '2 Hari Lalu',
+    notes: 'Memiliki pengalaman table service perhotelan.',
+    documents: [
+      createSeedDoc('seed-c4-cv', 'CV', 'CV_Dwito_Fajar_Hospitality.pdf', 229000),
+      createSeedDoc('seed-c4-ktp', 'KTP', 'KTP_Dwito_Fajar.pdf', 178000)
+    ]
   }
 ];
+
+const INITIAL_TRANSACTIONS = [
+  {
+    id: 'tx-1',
+    invoiceId: 'INV-HPY-2026-0891',
+    type: 'TOP_UP',
+    title: 'Top-Up Saldo Escrow Korporat Awal',
+    method: 'Virtual Account BCA (Escrow HarianPay)',
+    amount: 35000000,
+    status: 'Berhasil',
+    createdAt: '19 Nov 2026, 09:00 WIB'
+  },
+  {
+    id: 'tx-2',
+    invoiceId: 'INV-HPY-2026-0914',
+    type: 'ESCROW_LOCK',
+    title: 'Penguncian Dana Escrow: SPG Event Pameran (10 Kuota)',
+    method: 'Saldo HarianPay Korporat',
+    amount: 2500000,
+    status: 'Terkunci di Escrow',
+    createdAt: '20 Nov 2026, 10:15 WIB'
+  },
+  {
+    id: 'tx-3',
+    invoiceId: 'INV-HPY-2026-0942',
+    type: 'PAYOUT_H2',
+    title: 'Distribusi Gaji H+2: Kitchen Helper Harian (8 Pekerja)',
+    method: 'Auto-Disbursement HarianPay',
+    amount: 1200000,
+    status: 'Telah Dicairkan',
+    createdAt: '22 Nov 2026, 16:30 WIB'
+  }
+];
+
+const loadPersistedSprint3Db = () => {
+  if (typeof window === 'undefined') {
+    return {
+      workerProfile: INITIAL_WORKER_PROFILE,
+      hrdProfile: INITIAL_HRD_PROFILE,
+      jobs: INITIAL_JOBS,
+      applications: INITIAL_APPLICATIONS,
+      candidates: INITIAL_CANDIDATES,
+      hrdWalletBalance: 25000000,
+      paymentTransactions: INITIAL_TRANSACTIONS
+    };
+  }
+  try {
+    const raw = window.localStorage.getItem(HARIAN_DB_STORAGE_KEY);
+    if (!raw) throw new Error('empty');
+    const parsed = JSON.parse(raw);
+    return {
+      workerProfile: { ...INITIAL_WORKER_PROFILE, ...(parsed.workerProfile || {}) },
+      hrdProfile: { ...INITIAL_HRD_PROFILE, ...(parsed.hrdProfile || {}) },
+      jobs: Array.isArray(parsed.jobs)
+        ? parsed.jobs.map((j) => ({ status: 'OPEN', ...j }))
+        : INITIAL_JOBS,
+      applications: Array.isArray(parsed.applications)
+        ? parsed.applications.map((a) => ({ documents: [], ...a }))
+        : INITIAL_APPLICATIONS,
+      candidates: Array.isArray(parsed.candidates)
+        ? parsed.candidates.map((c) => ({
+            email: 'kandidat@harian.id',
+            phone: '+62 812-0000-0000',
+            city: 'Jabodetabek',
+            notes: '',
+            documents: [],
+            ...c
+          }))
+        : INITIAL_CANDIDATES,
+      hrdWalletBalance:
+        typeof parsed.hrdWalletBalance === 'number' ? parsed.hrdWalletBalance : 25000000,
+      paymentTransactions: Array.isArray(parsed.paymentTransactions)
+        ? parsed.paymentTransactions
+        : INITIAL_TRANSACTIONS
+    };
+  } catch {
+    return {
+      workerProfile: INITIAL_WORKER_PROFILE,
+      hrdProfile: INITIAL_HRD_PROFILE,
+      jobs: INITIAL_JOBS,
+      applications: INITIAL_APPLICATIONS,
+      candidates: INITIAL_CANDIDATES,
+      hrdWalletBalance: 25000000,
+      paymentTransactions: INITIAL_TRANSACTIONS
+    };
+  }
+};
 
 const CARA_KERJA_STEPS = {
   worker: [
@@ -1274,46 +1672,72 @@ export default function App() {
   const [workerFavCategory, setWorkerFavCategory] = useState(
     'Logistics & Warehouse'
   );
+  const initialDb = useMemo(() => loadPersistedSprint3Db(), []);
   const [hrdOnboardStep, setHrdOnboardStep] = useState(1);
-  const [hrdProfile, setHrdProfile] = useState({
-    companyName: 'PT Karya Maju',
-    industry: 'Event & Logistik Terpadu',
-    picContact: 'Admin HRD (+62 811-2233-4455)',
-    paymentMethod: 'Virtual Account BCA (Escrow HarianPay)'
-  });
+  const [hrdProfile, setHrdProfile] = useState(initialDb.hrdProfile);
 
-  // Auth & Profile Wizard State (UC-01 & UC-02)
+  // Auth & Profile State (UC-01, US-07, US-11)
   const [loginRole, setLoginRole] = useState('worker'); // 'worker' | 'hrd'
   const [loginEmail, setLoginEmail] = useState('budisantoso@gmail.com');
   const [loginPassword, setLoginPassword] = useState('harian123');
   const [loginError, setLoginError] = useState('');
   const [profileStep, setProfileStep] = useState(1);
-  const [workerProfile, setWorkerProfile] = useState({
-    fullName: 'Budi Santoso',
-    phone: '+62 812-3456-7890',
-    city: 'Bekasi, Jawa Barat',
-    bankAccount: 'BCA - 7410889210 (Budi Santoso)',
-    experiences: [
-      {
-        id: 'exp-1',
-        role: 'Delivery Driver & Warehouse Helper',
-        company: 'Speedy Deliveries Inc',
-        period: 'Jan 2025 - Des 2025'
-      }
-    ]
-  });
+  const [workerProfile, setWorkerProfile] = useState(initialDb.workerProfile);
+  const [profileRoleTab, setProfileRoleTab] = useState('worker'); // 'worker' | 'hrd'
+  const [workerProfileDraft, setWorkerProfileDraft] = useState(initialDb.workerProfile);
+  const [hrdProfileDraft, setHrdProfileDraft] = useState(initialDb.hrdProfile);
+  const [profileFormFeedback, setProfileFormFeedback] = useState(null);
+  const [profileSubmittedOnce, setProfileSubmittedOnce] = useState(false);
   const [newExpRole, setNewExpRole] = useState('');
   const [newExpCompany, setNewExpCompany] = useState('');
+  const [newExpPeriod, setNewExpPeriod] = useState('2025 - Sekarang');
+  const [editingExpId, setEditingExpId] = useState(null);
+  const profileFormRef = useRef(null);
 
-  // Core Portal Data State (Jobs, Applications, Candidates, Filters)
-  const [jobs, setJobs] = useState(INITIAL_JOBS);
-  const [applications, setApplications] = useState(INITIAL_APPLICATIONS);
-  const [candidates, setCandidates] = useState(INITIAL_CANDIDATES);
-  const [selectedJobId, setSelectedJobId] = useState(INITIAL_JOBS[0].id);
+  // Core Portal Data State (Jobs, Applications, Candidates, Wallet, Transactions)
+  const [jobs, setJobs] = useState(initialDb.jobs);
+  const [applications, setApplications] = useState(initialDb.applications);
+  const [candidates, setCandidates] = useState(initialDb.candidates);
+  const [selectedJobId, setSelectedJobId] = useState(
+    initialDb.jobs[0]?.id || INITIAL_JOBS[0].id
+  );
   const [jobDetailModalId, setJobDetailModalId] = useState(null);
   const [workerSubTab, setWorkerSubTab] = useState('explore'); // 'explore' | 'applications'
-  const [hrdSubTab, setHrdSubTab] = useState('jobs'); // 'jobs' | 'mfep' | 'escrow'
-  const [hrdWalletBalance, setHrdWalletBalance] = useState(25000000);
+  const [hrdSubTab, setHrdSubTab] = useState('jobs'); // 'jobs' | 'applicants' | 'mfep' | 'escrow'
+  const [hrdWalletBalance, setHrdWalletBalance] = useState(initialDb.hrdWalletBalance);
+  const [paymentTransactions, setPaymentTransactions] = useState(
+    initialDb.paymentTransactions
+  );
+
+  // US-08: Edit, Close, Delete Job States
+  const [hrdJobStatusFilter, setHrdJobStatusFilter] = useState('ALL');
+  const [editingJobModal, setEditingJobModal] = useState(null);
+  const [editJobError, setEditJobError] = useState('');
+  const [confirmJobActionModal, setConfirmJobActionModal] = useState(null);
+
+  // US-10: Requirement Document Upload States (Apply Job)
+  const [applyUploadDocs, setApplyUploadDocs] = useState({
+    CV: null,
+    KTP: null,
+    'Surat Pendukung': null
+  });
+  const [applyUploadError, setApplyUploadError] = useState('');
+
+  // US-12: Applicant CRUD ("Kelola Pelamar") & Document Viewer States
+  const [applicantSearchQuery, setApplicantSearchQuery] = useState('');
+  const [applicantRoleFilter, setApplicantRoleFilter] = useState('ALL');
+  const [applicantStatusFilter, setApplicantStatusFilter] = useState('ALL');
+  const [applicantCrudModal, setApplicantCrudModal] = useState(null);
+  const [applicantFormError, setApplicantFormError] = useState('');
+  const [applicantDetailModal, setApplicantDetailModal] = useState(null);
+  const [confirmDeleteApplicant, setConfirmDeleteApplicant] = useState(null);
+  const [previewDocModal, setPreviewDocModal] = useState(null);
+
+  // US-17: Payment Processor (HarianPay Gateway) States
+  const [paymentModal, setPaymentModal] = useState(null);
+  const [paymentModalError, setPaymentModalError] = useState('');
+  const [receiptPreviewTx, setReceiptPreviewTx] = useState(null);
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
   // Filter State (UC-05)
   const [filterKeyword, setFilterKeyword] = useState('');
@@ -1348,6 +1772,79 @@ export default function App() {
       'Membantu proses sortir barang masuk, pelabelan paket harian, dan menjaga kerapihan area gudang sesuai SOP.'
   });
 
+  // Dialog Heading Accessibility IDs
+  const editJobDialogTitleId = useId();
+  const confirmJobDialogTitleId = useId();
+  const applicantCrudDialogTitleId = useId();
+  const applicantDetailDialogTitleId = useId();
+  const deleteApplicantDialogTitleId = useId();
+  const previewDocDialogTitleId = useId();
+  const paymentDialogTitleId = useId();
+  const receiptDialogTitleId = useId();
+
+  // Persist Sprint 3 Database State to localStorage Consistently
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const compactDocs = (docs) =>
+      Array.isArray(docs)
+        ? docs.map((d) => {
+            if (d?.dataUrl && d.dataUrl.length > 650000) {
+              RUNTIME_LARGE_FILE_CACHE.set(d.id, d.dataUrl);
+              return { ...d, dataUrl: null };
+            }
+            return d;
+          })
+        : [];
+
+    const payload = {
+      workerProfile,
+      hrdProfile,
+      jobs,
+      applications: applications.map((a) => ({
+        ...a,
+        documents: compactDocs(a.documents)
+      })),
+      candidates: candidates.map((c) => ({
+        ...c,
+        documents: compactDocs(c.documents)
+      })),
+      hrdWalletBalance,
+      paymentTransactions
+    };
+
+    try {
+      window.localStorage.setItem(HARIAN_DB_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      try {
+        const slimPayload = {
+          ...payload,
+          applications: payload.applications.map((a) => ({
+            ...a,
+            documents: (a.documents || []).map((d) => ({ ...d, dataUrl: null }))
+          })),
+          candidates: payload.candidates.map((c) => ({
+            ...c,
+            documents: (c.documents || []).map((d) => ({ ...d, dataUrl: null }))
+          }))
+        };
+        window.localStorage.setItem(
+          HARIAN_DB_STORAGE_KEY,
+          JSON.stringify(slimPayload)
+        );
+      } catch {
+        // Ignore storage errors in restricted modes
+      }
+    }
+  }, [
+    workerProfile,
+    hrdProfile,
+    jobs,
+    applications,
+    candidates,
+    hrdWalletBalance,
+    paymentTransactions
+  ]);
+
   // Scroll & Animation Refs
   const landingRootRef = useRef(null);
   const heroSectionRef = useRef(null);
@@ -1363,12 +1860,27 @@ export default function App() {
   const formatRupiah = (num) =>
     'Rp ' + Number(num || 0).toLocaleString('id-ID');
 
+  const nowTimeLabel = () =>
+    new Date().toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }) +
+    ', ' +
+    new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }) +
+    ' WIB';
+
   const triggerToast = (message) => {
-    setToastMessage(String(message || ''));
+    const text = String(message || '');
+    setToastMessage(text);
+    setLiveAnnouncement(text);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => {
       setToastMessage(null);
-    }, 3400);
+    }, 3600);
   };
 
   // Sticky Navbar Shrink Listener + Smooth Scroll Parallax & Reveal Observer (60fps)
@@ -1501,11 +2013,23 @@ export default function App() {
   }, [activeView, workerSubTab, hrdSubTab]);
 
   // ============================================================================
-  // 5. NAVIGATION, DERIVED DATA & ACTION HANDLERS
+  // 5. NAVIGATION, DERIVED DATA & SPRINT 3 ACTION HANDLERS
   // ============================================================================
   const switchView = (nextView) => {
     setActiveView(nextView);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openProfileEditor = (preferredRole) => {
+    const targetRole =
+      preferredRole || (authenticatedRole === 'hrd' ? 'hrd' : 'worker');
+    setWorkerProfileDraft({ ...workerProfile });
+    setHrdProfileDraft({ ...hrdProfile });
+    setProfileRoleTab(targetRole);
+    setProfileStep(1);
+    setProfileFormFeedback(null);
+    setProfileSubmittedOnce(false);
+    switchView('profile');
   };
 
   const scrollToLandingSection = (sectionId) => {
@@ -1530,11 +2054,12 @@ export default function App() {
     switchView('register');
   };
 
-  // Filtered Jobs (UC-05)
+  // Filtered Active Jobs for Applicants (UC-05 & US-08: exclude CLOSED jobs!)
   const filteredJobs = useMemo(() => {
     const kw = filterKeyword.trim().toLowerCase();
     const minRateVal = Number(filterMinRate || 0);
     return jobs.filter((job) => {
+      if (job.status === 'CLOSED') return false;
       const matchKw =
         !kw ||
         job.title.toLowerCase().includes(kw) ||
@@ -1550,6 +2075,12 @@ export default function App() {
       return matchKw && matchLoc && matchCat && matchShift && matchRate;
     });
   }, [jobs, filterKeyword, filterLocation, filterCategory, filterShift, filterMinRate]);
+
+  // Filtered Jobs for HRD Management Table (US-08)
+  const hrdFilteredJobs = useMemo(() => {
+    if (hrdJobStatusFilter === 'ALL') return jobs;
+    return jobs.filter((j) => (j.status || 'OPEN') === hrdJobStatusFilter);
+  }, [jobs, hrdJobStatusFilter]);
 
   const selectedJob = useMemo(() => {
     return (
@@ -1596,7 +2127,41 @@ export default function App() {
       .sort((a, b) => Number(b.mfepScore) - Number(a.mfepScore));
   }, [candidates, mfepWeights]);
 
-  // Handlers
+  // Filtered Candidates for US-12 "Kelola Pelamar"
+  const filteredApplicantsList = useMemo(() => {
+    const q = applicantSearchQuery.trim().toLowerCase();
+    return rankedCandidates.filter((cand) => {
+      const matchQuery =
+        !q ||
+        cand.name.toLowerCase().includes(q) ||
+        (cand.email || '').toLowerCase().includes(q) ||
+        (cand.phone || '').toLowerCase().includes(q) ||
+        (cand.city || '').toLowerCase().includes(q);
+      const matchRole =
+        applicantRoleFilter === 'ALL' || cand.roleTarget === applicantRoleFilter;
+      const matchStatus =
+        applicantStatusFilter === 'ALL' || cand.status === applicantStatusFilter;
+      return matchQuery && matchRole && matchStatus;
+    });
+  }, [rankedCandidates, applicantSearchQuery, applicantRoleFilter, applicantStatusFilter]);
+
+  const recordTransaction = (type, title, method, amount, status = 'Berhasil') => {
+    const tx = {
+      id: 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+      invoiceId:
+        'INV-HPY-2026-' + String(Math.floor(1000 + Math.random() * 9000)),
+      type,
+      title,
+      method,
+      amount: Number(amount || 0),
+      status,
+      createdAt: nowTimeLabel()
+    };
+    setPaymentTransactions((prev) => [tx, ...prev]);
+    return tx;
+  };
+
+  // Auth Handlers
   const handleRegisterSubmit = (e) => {
     e.preventDefault();
     if (!agreeServiceFee) {
@@ -1657,49 +2222,285 @@ export default function App() {
     }
   };
 
+  // US-07: Save Basic Profile for Worker OR Instansi/HRD
+  const handleSaveBasicProfile = (e) => {
+    e.preventDefault();
+    setProfileSubmittedOnce(true);
+
+    if (profileRoleTab === 'worker') {
+      const isMissing =
+        !workerProfileDraft.fullName?.trim() ||
+        !workerProfileDraft.phone?.trim() ||
+        !workerProfileDraft.bio?.trim() ||
+        !workerProfileDraft.city?.trim();
+
+      if (isMissing) {
+        setProfileFormFeedback({
+          type: 'error',
+          message: 'Kolom wajib isi tidak boleh kosong'
+        });
+        triggerToast('Kolom wajib isi tidak boleh kosong');
+        const firstEmpty = profileFormRef.current?.querySelector(
+          'input[data-empty="true"], textarea[data-empty="true"]'
+        );
+        firstEmpty?.focus();
+        return;
+      }
+
+      const prevName = workerProfile.fullName;
+      const updatedWorker = {
+        ...workerProfile,
+        fullName: workerProfileDraft.fullName.trim(),
+        phone: workerProfileDraft.phone.trim(),
+        city: workerProfileDraft.city.trim(),
+        bio: workerProfileDraft.bio.trim(),
+        bankAccount:
+          workerProfileDraft.bankAccount?.trim() || workerProfile.bankAccount
+      };
+      setWorkerProfile(updatedWorker);
+      setWorkerProfileDraft(updatedWorker);
+
+      setCandidates((prev) =>
+        prev.map((c) =>
+          c.name === prevName || c.id === 'cand-1'
+            ? {
+                ...c,
+                name: updatedWorker.fullName,
+                phone: updatedWorker.phone,
+                city: updatedWorker.city
+              }
+            : c
+        )
+      );
+
+      setProfileFormFeedback({
+        type: 'success',
+        message: 'Profil berhasil diperbarui'
+      });
+      triggerToast('Profil berhasil diperbarui');
+    } else {
+      const isMissing =
+        !hrdProfileDraft.companyName?.trim() ||
+        !hrdProfileDraft.picContact?.trim() ||
+        !hrdProfileDraft.description?.trim() ||
+        !hrdProfileDraft.industry?.trim();
+
+      if (isMissing) {
+        setProfileFormFeedback({
+          type: 'error',
+          message: 'Kolom wajib isi tidak boleh kosong'
+        });
+        triggerToast('Kolom wajib isi tidak boleh kosong');
+        const firstEmpty = profileFormRef.current?.querySelector(
+          'input[data-empty="true"], textarea[data-empty="true"]'
+        );
+        firstEmpty?.focus();
+        return;
+      }
+
+      const oldCompanyName = hrdProfile.companyName;
+      const updatedHrd = {
+        ...hrdProfile,
+        companyName: hrdProfileDraft.companyName.trim(),
+        industry: hrdProfileDraft.industry.trim(),
+        picContact: hrdProfileDraft.picContact.trim(),
+        location: hrdProfileDraft.location?.trim() || 'Jakarta',
+        description: hrdProfileDraft.description.trim(),
+        paymentMethod:
+          hrdProfileDraft.paymentMethod || hrdProfile.paymentMethod
+      };
+      setHrdProfile(updatedHrd);
+      setHrdProfileDraft(updatedHrd);
+
+      if (oldCompanyName && oldCompanyName !== updatedHrd.companyName) {
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.company === oldCompanyName
+              ? { ...j, company: updatedHrd.companyName }
+              : j
+          )
+        );
+      }
+
+      setProfileFormFeedback({
+        type: 'success',
+        message: 'Profil berhasil diperbarui'
+      });
+      triggerToast('Profil berhasil diperbarui');
+    }
+  };
+
+  // US-11: Experience CRUD & Bank Account Validation
   const handleAddExperience = () => {
     if (!newExpRole.trim()) {
       triggerToast('Tuliskan posisi pengalaman kerja terlebih dahulu.');
       return;
     }
-    setWorkerProfile((prev) => ({
-      ...prev,
-      experiences: [
-        ...prev.experiences,
-        {
-          id: 'exp-' + Date.now(),
-          role: newExpRole.trim(),
-          company: newExpCompany.trim() || 'Mitra Harian',
-          period: '2025 - Sekarang'
-        }
-      ]
-    }));
+    const nextExperiences = editingExpId
+      ? workerProfile.experiences.map((item) =>
+          item.id === editingExpId
+            ? {
+                ...item,
+                role: newExpRole.trim(),
+                company: newExpCompany.trim() || 'Mitra Harian',
+                period: newExpPeriod.trim() || '2025 - Sekarang'
+              }
+            : item
+        )
+      : [
+          ...workerProfile.experiences,
+          {
+            id: 'exp-' + Date.now(),
+            role: newExpRole.trim(),
+            company: newExpCompany.trim() || 'Mitra Harian',
+            period: newExpPeriod.trim() || '2025 - Sekarang'
+          }
+        ];
+
+    const newExpScore = Math.min(100, 75 + nextExperiences.length * 8);
+    setWorkerProfile((prev) => ({ ...prev, experiences: nextExperiences }));
+    setWorkerProfileDraft((prev) => ({ ...prev, experiences: nextExperiences }));
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.id === 'cand-1' || c.name === workerProfile.fullName
+          ? { ...c, exp: newExpScore }
+          : c
+      )
+    );
     setNewExpRole('');
     setNewExpCompany('');
-    triggerToast('Pengalaman kerja baru berhasil ditambahkan.');
+    setNewExpPeriod('2025 - Sekarang');
+    setEditingExpId(null);
+    triggerToast(
+      editingExpId
+        ? 'Riwayat pengalaman kerja berhasil diperbarui.'
+        : 'Pengalaman kerja baru berhasil ditambahkan.'
+    );
+  };
+
+  const handleDeleteExperience = (expId) => {
+    const nextExperiences = workerProfile.experiences.filter(
+      (item) => item.id !== expId
+    );
+    const newExpScore = Math.min(100, 72 + nextExperiences.length * 8);
+    setWorkerProfile((prev) => ({ ...prev, experiences: nextExperiences }));
+    setWorkerProfileDraft((prev) => ({ ...prev, experiences: nextExperiences }));
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.id === 'cand-1' || c.name === workerProfile.fullName
+          ? { ...c, exp: newExpScore }
+          : c
+      )
+    );
+    if (editingExpId === expId) {
+      setEditingExpId(null);
+      setNewExpRole('');
+      setNewExpCompany('');
+    }
+    triggerToast('Riwayat pengalaman kerja berhasil dihapus.');
+  };
+
+  const handleSaveBankAccount = () => {
+    const val = (workerProfileDraft.bankAccount || '').trim();
+    const digits = val.replace(/\D/g, '');
+    if (!val || digits.length < 6) {
+      triggerToast(
+        'Masukkan format nomor rekening bank/e-wallet yang valid (min. 6 digit nomor rekening).'
+      );
+      return;
+    }
+    setWorkerProfile((prev) => ({ ...prev, bankAccount: val }));
+    triggerToast('Nomor rekening pencairan gaji berhasil disimpan.');
+  };
+
+  // US-10: Requirement Document Upload Handlers for Job Application
+  const handleSelectApplyFile = async (docType, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const res = await validateAndReadUploadFile(file, docType);
+    if (!res.ok) {
+      setApplyUploadError(res.error);
+      triggerToast(res.error);
+      return;
+    }
+    setApplyUploadError('');
+    setApplyUploadDocs((prev) => ({ ...prev, [docType]: res.doc }));
+    triggerToast(`Berkas ${docType} (${res.doc.fileName}) berhasil dipilih.`);
+  };
+
+  const handleQuickFillVerifiedDocs = () => {
+    const safeSlug =
+      workerProfile.fullName.replace(/\s+/g, '_') || 'Pekerja_Harian';
+    setApplyUploadDocs({
+      CV: createSeedDoc(
+        'doc-cv-' + Date.now(),
+        'CV',
+        `CV_${safeSlug}_2026.pdf`,
+        254000
+      ),
+      KTP: createSeedDoc(
+        'doc-ktp-' + Date.now(),
+        'KTP',
+        `KTP_${safeSlug}_Verified.jpg`,
+        188000,
+        'image/jpeg'
+      ),
+      'Surat Pendukung': createSeedDoc(
+        'doc-sk-' + Date.now(),
+        'Surat Pendukung',
+        `Surat_Pengalaman_${safeSlug}.pdf`,
+        215000
+      )
+    });
+    setApplyUploadError('');
+    triggerToast('Berkas profil tersimpan (CV, KTP, Surat Pendukung) siap dilampirkan.');
   };
 
   const handleApplyToJob = (job) => {
-    if (!job) return;
+    if (!job || job.status === 'CLOSED') {
+      triggerToast('Lowongan ini sudah ditutup dan tidak menerima lamaran baru.');
+      return false;
+    }
     const exists = applications.some(
       (a) => a.jobId === job.id && a.status !== 'Dibatalkan'
     );
     if (exists) {
       triggerToast('Anda sudah melamar pada lowongan ini.');
-      return;
+      return false;
     }
+
+    if (!applyUploadDocs.CV || !applyUploadDocs.KTP) {
+      const msg =
+        'Mohon unggah berkas wajib (CV dan KTP) sesuai format (PDF/JPG/PNG/DOCX, maks. 5 MB) sebelum mengirim lamaran.';
+      setApplyUploadError(msg);
+      triggerToast(msg);
+      return false;
+    }
+
+    const attachedDocs = [
+      applyUploadDocs.CV,
+      applyUploadDocs.KTP,
+      applyUploadDocs['Surat Pendukung']
+    ].filter(Boolean);
+
+    const newAppId = 'app-' + Date.now();
+    const appliedTime = nowTimeLabel();
+
     setApplications((prev) => [
       {
-        id: 'app-' + Date.now(),
+        id: newAppId,
         jobId: job.id,
         jobTitle: job.title,
         company: job.company,
         rate: job.rate,
         status: 'Pending',
-        appliedAt: 'Baru saja'
+        appliedAt: appliedTime,
+        documents: attachedDocs
       },
       ...prev
     ]);
+
     setJobs((prev) =>
       prev.map((j) =>
         j.id === job.id
@@ -1707,9 +2508,43 @@ export default function App() {
           : j
       )
     );
+
+    const expScore = Math.min(100, 78 + workerProfile.experiences.length * 8);
+    const distScore = workerProfile.city
+      .toLowerCase()
+      .includes(job.location.toLowerCase())
+      ? 94
+      : 84;
+    const docScore = attachedDocs.length >= 3 ? 100 : 95;
+
+    setCandidates((prev) => [
+      {
+        id: 'cand-' + Date.now(),
+        applicationId: newAppId,
+        jobId: job.id,
+        name: workerProfile.fullName,
+        email: loginEmail || registerEmail || 'pekerja@harian.id',
+        phone: workerProfile.phone,
+        city: workerProfile.city,
+        roleTarget: job.title,
+        exp: expScore,
+        avail: 92,
+        dist: distScore,
+        doc: docScore,
+        status: 'Pending',
+        appliedAt: appliedTime,
+        notes: workerProfile.bio || 'Melamar melalui Portal Pekerja Harian.',
+        documents: attachedDocs
+      },
+      ...prev
+    ]);
+
+    setApplyUploadDocs({ CV: null, KTP: null, 'Surat Pendukung': null });
+    setApplyUploadError('');
     triggerToast(
-      `Lamaran ke ${job.title} berhasil dikirim! Status: Pending.`
+      `Berkas berhasil diunggah & lamaran ke ${job.title} tersimpan untuk diperiksa HRD!`
     );
+    return true;
   };
 
   const handleCancelApplication = (appId) => {
@@ -1720,17 +2555,31 @@ export default function App() {
           : a
       )
     );
+    setCandidates((prev) =>
+      prev.filter((c) => !(c.applicationId === appId && c.status === 'Pending'))
+    );
     triggerToast('Lamaran berstatus Pending berhasil dibatalkan.');
   };
 
   const handleCandidateDecision = (candId, decision) => {
+    const target = candidates.find((c) => c.id === candId);
     setCandidates((prev) =>
       prev.map((c) => (c.id === candId ? { ...c, status: decision } : c))
     );
-    const target = candidates.find((c) => c.id === candId);
-    if (target && target.name === 'Budi Santoso') {
+    if (target) {
       setApplications((prev) =>
-        prev.map((a, idx) => (idx === 0 ? { ...a, status: decision } : a))
+        prev.map((a) => {
+          if (target.applicationId && a.id === target.applicationId) {
+            return { ...a, status: decision };
+          }
+          if (
+            target.name === workerProfile.fullName &&
+            (a.jobId === target.jobId || a.jobTitle === target.roleTarget)
+          ) {
+            return { ...a, status: decision };
+          }
+          return a;
+        })
       );
     }
     triggerToast(
@@ -1739,9 +2588,12 @@ export default function App() {
   };
 
   const handleReleaseEscrowH2 = (jobId) => {
+    const targetJob = jobs.find((j) => j.id === jobId);
     setJobs((prev) =>
       prev.map((j) =>
-        j.id === jobId ? { ...j, escrowStage: 'PAID_H2' } : j
+        j.id === jobId
+          ? { ...j, escrowStage: 'PAID_H2', status: 'COMPLETED' }
+          : j
       )
     );
     setApplications((prev) =>
@@ -1749,13 +2601,107 @@ export default function App() {
         a.jobId === jobId ? { ...a, status: 'Gaji Cair H+2' } : a
       )
     );
+    if (targetJob) {
+      recordTransaction(
+        'PAYOUT_H2',
+        `Pencairan Gaji H+2: ${targetJob.title} (${targetJob.quota} Kuota)`,
+        'Auto-Disbursement Escrow HarianPay',
+        targetJob.escrowHeld,
+        'Telah Dicairkan'
+      );
+    }
     triggerToast(
       'Pekerjaan ditandai selesai! Dana Escrow otomatis dicairkan ke rekening pekerja (H+2).'
     );
   };
 
+  // US-17: Open Payment Processor Modal
+  const openPaymentGatewayModal = (
+    purpose = 'TOPUP',
+    amount = 2500000,
+    pendingJobPayload = null
+  ) => {
+    setPaymentModalError('');
+    setPaymentModal({
+      purpose,
+      amount: Number(amount || 2500000),
+      method: hrdProfile.paymentMethod || 'Virtual Account BCA (Escrow HarianPay)',
+      invoiceId:
+        'INV-HPY-2026-' + String(Math.floor(1000 + Math.random() * 9000)),
+      vaNumber: '88019 ' + String(Math.floor(1000000000 + Math.random() * 8999999999)),
+      pendingJobPayload
+    });
+  };
+
+  const handleProcessGatewayPayment = (e) => {
+    e.preventDefault();
+    if (!paymentModal) return;
+    const payAmount = Number(paymentModal.amount || 0);
+    if (payAmount < 50000) {
+      setPaymentModalError('Nominal pembayaran minimum adalah Rp 50.000.');
+      return;
+    }
+
+    if (paymentModal.purpose === 'JOB_ESCROW' && paymentModal.pendingJobPayload) {
+      const jobPayload = paymentModal.pendingJobPayload;
+      recordTransaction(
+        'TOP_UP',
+        `Pembayaran Gateway (${paymentModal.invoiceId}) untuk Escrow Lowongan`,
+        paymentModal.method,
+        payAmount,
+        'Berhasil'
+      );
+      const escrowNeeded = Number(jobPayload.rate) * Number(jobPayload.quota);
+      const nextBalance = hrdWalletBalance + payAmount - escrowNeeded;
+      const created = {
+        ...jobPayload,
+        id: 'job-' + Date.now(),
+        escrowHeld: escrowNeeded,
+        escrowStage: 'HELD',
+        status: 'OPEN'
+      };
+      setHrdWalletBalance(Math.max(0, nextBalance));
+      setJobs((prev) => [created, ...prev]);
+      recordTransaction(
+        'ESCROW_LOCK',
+        `Penguncian Dana Escrow: ${created.title} (${created.quota} Kuota)`,
+        paymentModal.method,
+        escrowNeeded,
+        'Terkunci di Escrow'
+      );
+      setPaymentModal(null);
+      setShowCreateJobModal(false);
+      triggerToast(
+        `Pembayaran lunas & lowongan "${created.title}" resmi tayang di pencarian pelamar!`
+      );
+      return;
+    }
+
+    setHrdWalletBalance((prev) => prev + payAmount);
+    recordTransaction(
+      'TOP_UP',
+      `Top-Up Saldo Escrow Korporat (${paymentModal.invoiceId})`,
+      paymentModal.method,
+      payAmount,
+      'Berhasil'
+    );
+    setPaymentModal(null);
+    triggerToast(
+      `Pembayaran ${formatRupiah(payAmount)} melalui ${paymentModal.method} berhasil dikonfirmasi!`
+    );
+  };
+
   const handleCreateJobSubmit = (e) => {
     e.preventDefault();
+    if (
+      !newJobForm.title?.trim() ||
+      !newJobForm.location?.trim() ||
+      !newJobForm.workTime?.trim() ||
+      !newJobForm.description?.trim()
+    ) {
+      setCreateJobError('Kolom wajib isi tidak boleh kosong.');
+      return;
+    }
     const rateNum = Number(newJobForm.rate || 0);
     const quotaNum = Number(newJobForm.quota || 0);
     if (rateNum < 100000) {
@@ -1764,35 +2710,57 @@ export default function App() {
       );
       return;
     }
-    const escrowNeeded = rateNum * quotaNum;
-    if (escrowNeeded > hrdWalletBalance) {
-      setCreateJobError(
-        'Saldo HarianPay Korporat tidak mencukupi untuk mengunci dana Escrow.'
-      );
+    if (quotaNum < 1) {
+      setCreateJobError('Kuota pekerja minimal adalah 1 orang.');
       return;
     }
-    const created = {
-      id: 'job-' + Date.now(),
-      title: newJobForm.title,
+    const escrowNeeded = rateNum * quotaNum;
+    const draftJobPayload = {
+      title: newJobForm.title.trim(),
       company: hrdProfile.companyName || 'PT Karya Maju',
-      location: newJobForm.location,
+      location: newJobForm.location.trim(),
       rate: rateNum,
-      workTime: newJobForm.workTime,
+      workTime: newJobForm.workTime.trim(),
       scheduleType: newJobForm.scheduleType || 'Morning Shift',
       category: newJobForm.category || 'Logistics & Warehouse',
       quota: quotaNum,
       applicantsCount: 0,
       integrityScore: '4.9 / 5.0 (Verified Partner)',
+      matchScore: 96,
+      picName: newJobForm.picName?.trim() || hrdProfile.picContact,
+      picPhone: newJobForm.picPhone?.trim() || '+62 811-2233-4455',
+      dresscode:
+        newJobForm.dresscode?.trim() || 'Pakaian rapi dan sepatu tertutup.',
+      description: newJobForm.description.trim()
+    };
+
+    if (escrowNeeded > hrdWalletBalance) {
+      const shortfall = escrowNeeded - hrdWalletBalance;
+      setCreateJobError(
+        `Saldo HarianPay kurang ${formatRupiah(
+          shortfall
+        )}. Silakan proses pembayaran kekurangan melalui Pemroses Pembayaran HarianPay.`
+      );
+      openPaymentGatewayModal('JOB_ESCROW', shortfall, draftJobPayload);
+      return;
+    }
+
+    const created = {
+      ...draftJobPayload,
+      id: 'job-' + Date.now(),
       escrowHeld: escrowNeeded,
       escrowStage: 'HELD',
-      matchScore: 96,
-      picName: newJobForm.picName,
-      picPhone: newJobForm.picPhone,
-      dresscode: newJobForm.dresscode,
-      description: newJobForm.description
+      status: 'OPEN'
     };
     setJobs((prev) => [created, ...prev]);
     setHrdWalletBalance((prev) => prev - escrowNeeded);
+    recordTransaction(
+      'ESCROW_LOCK',
+      `Penguncian Dana Escrow: ${created.title} (${created.quota} Kuota)`,
+      'Saldo HarianPay Korporat',
+      escrowNeeded,
+      'Terkunci di Escrow'
+    );
     setShowCreateJobModal(false);
     triggerToast(
       `Lowongan "${created.title}" berhasil tayang & dana Escrow ${formatRupiah(
@@ -1801,11 +2769,443 @@ export default function App() {
     );
   };
 
+  // US-08: Edit, Close/Reopen, and Delete Job Handlers
+  const handleOpenEditJob = (job) => {
+    setEditJobError('');
+    setEditingJobModal({ ...job });
+  };
+
+  const handleEditJobSubmit = (e) => {
+    e.preventDefault();
+    if (!editingJobModal) return;
+    if (
+      !editingJobModal.title?.trim() ||
+      !editingJobModal.location?.trim() ||
+      !editingJobModal.workTime?.trim() ||
+      !editingJobModal.description?.trim()
+    ) {
+      setEditJobError('Kolom wajib isi tidak boleh kosong.');
+      return;
+    }
+    const rateNum = Number(editingJobModal.rate || 0);
+    const quotaNum = Number(editingJobModal.quota || 0);
+    if (rateNum < 100000) {
+      setEditJobError(
+        'Upah harian minimum adalah Rp 100.000 sesuai standar kelayakan Harian.'
+      );
+      return;
+    }
+    if (quotaNum < 1) {
+      setEditJobError('Kuota pekerja minimal adalah 1 orang.');
+      return;
+    }
+
+    const originalJob = jobs.find((j) => j.id === editingJobModal.id);
+    if (!originalJob) return;
+
+    let nextWallet = hrdWalletBalance;
+    let nextEscrowHeld = originalJob.escrowHeld;
+    let nextEscrowStage = originalJob.escrowStage;
+    const nextStatus = editingJobModal.status || originalJob.status || 'OPEN';
+
+    if (originalJob.escrowStage !== 'PAID_H2') {
+      if (nextStatus === 'CLOSED') {
+        if (originalJob.escrowStage === 'HELD' && originalJob.escrowHeld > 0) {
+          nextWallet += originalJob.escrowHeld;
+          recordTransaction(
+            'ESCROW_REFUND',
+            `Pengembalian Dana Escrow (Lowongan Ditutup): ${editingJobModal.title.trim()}`,
+            'Saldo HarianPay Korporat',
+            originalJob.escrowHeld,
+            'Dikembalikan'
+          );
+        }
+        nextEscrowHeld = 0;
+        nextEscrowStage = 'REFUNDED_CLOSED';
+      } else {
+        const requiredEscrow = rateNum * quotaNum;
+        const currentlyHeld =
+          originalJob.escrowStage === 'HELD' ? originalJob.escrowHeld : 0;
+        const diff = requiredEscrow - currentlyHeld;
+        if (diff > nextWallet) {
+          setEditJobError(
+            `Saldo HarianPay tidak cukup untuk penambahan Escrow sebesar ${formatRupiah(
+              diff
+            )}. Silakan Top-Up terlebih dahulu.`
+          );
+          return;
+        }
+        nextWallet -= diff;
+        nextEscrowHeld = requiredEscrow;
+        nextEscrowStage = 'HELD';
+        if (diff > 0) {
+          recordTransaction(
+            'ESCROW_LOCK',
+            `Penyesuaian Tambahan Escrow: ${editingJobModal.title.trim()}`,
+            'Saldo HarianPay Korporat',
+            diff,
+            'Terkunci di Escrow'
+          );
+        } else if (diff < 0) {
+          recordTransaction(
+            'ESCROW_REFUND',
+            `Pengembalian Selisih Escrow: ${editingJobModal.title.trim()}`,
+            'Saldo HarianPay Korporat',
+            Math.abs(diff),
+            'Dikembalikan'
+          );
+        }
+      }
+    }
+
+    const updatedJob = {
+      ...originalJob,
+      ...editingJobModal,
+      title: editingJobModal.title.trim(),
+      location: editingJobModal.location.trim(),
+      workTime: editingJobModal.workTime.trim(),
+      description: editingJobModal.description.trim(),
+      rate: rateNum,
+      quota: quotaNum,
+      status: nextStatus,
+      escrowHeld: nextEscrowHeld,
+      escrowStage: nextEscrowStage
+    };
+
+    setHrdWalletBalance(nextWallet);
+    setJobs((prev) =>
+      prev.map((j) => (j.id === updatedJob.id ? updatedJob : j))
+    );
+    setApplications((prev) =>
+      prev.map((a) =>
+        a.jobId === updatedJob.id
+          ? { ...a, jobTitle: updatedJob.title, rate: updatedJob.rate }
+          : a
+      )
+    );
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.jobId === updatedJob.id || c.roleTarget === originalJob.title
+          ? { ...c, roleTarget: updatedJob.title }
+          : c
+      )
+    );
+    if (nextStatus === 'CLOSED' && jobDetailModalId === updatedJob.id) {
+      setJobDetailModalId(null);
+    }
+    setEditingJobModal(null);
+    triggerToast(
+      nextStatus === 'CLOSED'
+        ? `Lowongan "${updatedJob.title}" ditutup dan tidak lagi muncul di pencarian aktif pelamar.`
+        : `Detail lowongan "${updatedJob.title}" berhasil diperbarui di database.`
+    );
+  };
+
+  const handleConfirmJobStatusOrDelete = () => {
+    if (!confirmJobActionModal?.job) return;
+    const { mode, job } = confirmJobActionModal;
+
+    if (mode === 'close') {
+      if (job.escrowStage === 'HELD' && job.escrowHeld > 0) {
+        setHrdWalletBalance((prev) => prev + job.escrowHeld);
+        recordTransaction(
+          'ESCROW_REFUND',
+          `Pengembalian Dana Escrow (Lowongan Ditutup): ${job.title}`,
+          'Saldo HarianPay Korporat',
+          job.escrowHeld,
+          'Dikembalikan'
+        );
+      }
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === job.id
+            ? {
+                ...j,
+                status: 'CLOSED',
+                escrowHeld:
+                  j.escrowStage === 'PAID_H2' ? j.escrowHeld : 0,
+                escrowStage:
+                  j.escrowStage === 'PAID_H2' ? 'PAID_H2' : 'REFUNDED_CLOSED'
+              }
+            : j
+        )
+      );
+      if (jobDetailModalId === job.id) setJobDetailModalId(null);
+      setConfirmJobActionModal(null);
+      triggerToast(
+        `Lowongan "${job.title}" berhasil ditutup dan dihapus dari pencarian aktif pelamar.`
+      );
+      return;
+    }
+
+    if (mode === 'reopen') {
+      const escrowRequired = Number(job.rate) * Number(job.quota);
+      if (escrowRequired > hrdWalletBalance) {
+        setConfirmJobActionModal(null);
+        openPaymentGatewayModal(
+          'TOPUP',
+          escrowRequired - hrdWalletBalance
+        );
+        triggerToast(
+          'Saldo HarianPay belum mencukupi untuk mengunci ulang dana Escrow lowongan.'
+        );
+        return;
+      }
+      setHrdWalletBalance((prev) => prev - escrowRequired);
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === job.id
+            ? {
+                ...j,
+                status: 'OPEN',
+                escrowHeld: escrowRequired,
+                escrowStage: 'HELD'
+              }
+            : j
+        )
+      );
+      recordTransaction(
+        'ESCROW_LOCK',
+        `Penguncian Ulang Dana Escrow: ${job.title}`,
+        'Saldo HarianPay Korporat',
+        escrowRequired,
+        'Terkunci di Escrow'
+      );
+      setConfirmJobActionModal(null);
+      triggerToast(
+        `Lowongan "${job.title}" kembali aktif di pencarian pelamar.`
+      );
+      return;
+    }
+
+    if (mode === 'delete') {
+      if (job.escrowStage === 'HELD' && job.escrowHeld > 0) {
+        setHrdWalletBalance((prev) => prev + job.escrowHeld);
+        recordTransaction(
+          'ESCROW_REFUND',
+          `Pengembalian Dana Escrow (Lowongan Dihapus): ${job.title}`,
+          'Saldo HarianPay Korporat',
+          job.escrowHeld,
+          'Dikembalikan'
+        );
+      }
+      setJobs((prev) => prev.filter((j) => j.id !== job.id));
+      if (jobDetailModalId === job.id) setJobDetailModalId(null);
+      setConfirmJobActionModal(null);
+      triggerToast(
+        `Lowongan "${job.title}" berhasil dihapus dari database dan tidak lagi muncul di pencarian pelamar.`
+      );
+    }
+  };
+
+  // US-12: Applicant CRUD ("Kelola Pelamar") & Document Handlers
+  const handleOpenCreateApplicant = () => {
+    const defaultJob = jobs.find((j) => j.status !== 'CLOSED') || jobs[0];
+    setApplicantFormError('');
+    setApplicantCrudModal({
+      mode: 'create',
+      data: {
+        id: '',
+        applicationId: null,
+        jobId: defaultJob?.id || 'job-1',
+        name: '',
+        email: '',
+        phone: '',
+        city: '',
+        roleTarget: defaultJob?.title || 'Warehouse Packer (Night Shift)',
+        exp: 85,
+        avail: 88,
+        dist: 85,
+        doc: 90,
+        status: 'Pending',
+        notes: '',
+        documents: []
+      }
+    });
+  };
+
+  const handleOpenEditApplicant = (cand) => {
+    setApplicantFormError('');
+    setApplicantCrudModal({
+      mode: 'edit',
+      data: {
+        ...cand,
+        documents: Array.isArray(cand.documents) ? [...cand.documents] : []
+      }
+    });
+  };
+
+  const handleApplicantModalFileUpload = async (docType, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !applicantCrudModal) return;
+    const res = await validateAndReadUploadFile(file, docType);
+    if (!res.ok) {
+      setApplicantFormError(res.error);
+      triggerToast(res.error);
+      return;
+    }
+    setApplicantFormError('');
+    setApplicantCrudModal((prev) => {
+      if (!prev) return prev;
+      const filtered = (prev.data.documents || []).filter(
+        (d) => d.docType !== docType
+      );
+      const nextDocs = [...filtered, res.doc];
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          doc: Math.min(100, 80 + nextDocs.length * 7),
+          documents: nextDocs
+        }
+      };
+    });
+    triggerToast(`Berkas ${docType} (${res.doc.fileName}) berhasil dilampirkan.`);
+  };
+
+  const handleRemoveApplicantModalDoc = (docId) => {
+    setApplicantCrudModal((prev) => {
+      if (!prev) return prev;
+      const nextDocs = (prev.data.documents || []).filter((d) => d.id !== docId);
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          documents: nextDocs
+        }
+      };
+    });
+  };
+
+  const handleSaveApplicantCrud = (e) => {
+    e.preventDefault();
+    if (!applicantCrudModal) return;
+    const d = applicantCrudModal.data;
+    if (!d.name?.trim() || !d.phone?.trim() || !d.city?.trim() || !d.roleTarget?.trim()) {
+      setApplicantFormError(
+        'Nama lengkap, nomor kontak, domisili, dan posisi lamaran wajib diisi.'
+      );
+      return;
+    }
+
+    const matchedJob = jobs.find(
+      (j) => j.id === d.jobId || j.title === d.roleTarget
+    );
+    const cleanedCandidate = {
+      ...d,
+      id: applicantCrudModal.mode === 'create' ? 'cand-' + Date.now() : d.id,
+      jobId: matchedJob?.id || d.jobId || 'job-1',
+      roleTarget: matchedJob?.title || d.roleTarget.trim(),
+      name: d.name.trim(),
+      email: d.email?.trim() || 'kandidat@harian.id',
+      phone: d.phone.trim(),
+      city: d.city.trim(),
+      exp: Math.min(100, Math.max(0, Number(d.exp || 80))),
+      avail: Math.min(100, Math.max(0, Number(d.avail || 80))),
+      dist: Math.min(100, Math.max(0, Number(d.dist || 80))),
+      doc: Math.min(100, Math.max(0, Number(d.doc || 85))),
+      appliedAt: d.appliedAt || nowTimeLabel(),
+      notes: d.notes?.trim() || '',
+      documents: Array.isArray(d.documents) ? d.documents : []
+    };
+
+    if (applicantCrudModal.mode === 'create') {
+      setCandidates((prev) => [cleanedCandidate, ...prev]);
+      if (matchedJob) {
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === matchedJob.id
+              ? { ...j, applicantsCount: j.applicantsCount + 1 }
+              : j
+          )
+        );
+      }
+      setApplicantCrudModal(null);
+      triggerToast(
+        `Data pelamar "${cleanedCandidate.name}" berhasil ditambahkan ke database.`
+      );
+    } else {
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === cleanedCandidate.id ? cleanedCandidate : c))
+      );
+      setApplications((prev) =>
+        prev.map((a) => {
+          if (
+            (cleanedCandidate.applicationId &&
+              a.id === cleanedCandidate.applicationId) ||
+            (cleanedCandidate.name === workerProfile.fullName &&
+              a.jobTitle === cleanedCandidate.roleTarget)
+          ) {
+            return {
+              ...a,
+              status: cleanedCandidate.status,
+              documents:
+                cleanedCandidate.documents.length > 0
+                  ? cleanedCandidate.documents
+                  : a.documents
+            };
+          }
+          return a;
+        })
+      );
+      setApplicantCrudModal(null);
+      triggerToast(
+        `Perubahan data pelamar "${cleanedCandidate.name}" berhasil disimpan di database.`
+      );
+    }
+  };
+
+  const handleConfirmDeleteApplicantNow = () => {
+    if (!confirmDeleteApplicant) return;
+    const target = confirmDeleteApplicant;
+    setCandidates((prev) => prev.filter((c) => c.id !== target.id));
+    setConfirmDeleteApplicant(null);
+    if (applicantDetailModal?.id === target.id) {
+      setApplicantDetailModal(null);
+    }
+    triggerToast(
+      `Data pelamar "${target.name}" berhasil dihapus secara konsisten dari database.`
+    );
+  };
+
+  const resolveDocDataUrl = (doc) => {
+    if (!doc) return null;
+    return doc.dataUrl || RUNTIME_LARGE_FILE_CACHE.get(doc.id) || null;
+  };
+
+  const handleDownloadDocumentFile = (doc, ownerName = 'Kandidat Harian') => {
+    if (!doc) return;
+    const rawDataUrl = resolveDocDataUrl(doc);
+    if (rawDataUrl) {
+      const a = document.createElement('a');
+      a.href = rawDataUrl;
+      a.download = doc.fileName || 'Berkas_Lamaran_Harian.pdf';
+      a.click();
+      triggerToast(`Berkas "${doc.fileName}" berhasil diunduh.`);
+      return;
+    }
+    const htmlContent = buildGeneratedDocumentHtml(doc, ownerName);
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const baseName = (doc.fileName || 'Berkas_Persyaratan').replace(/\.[^.]+$/, '');
+    a.download = `${baseName}_Verified.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    triggerToast(`Salinan berkas terverifikasi "${doc.fileName}" berhasil diunduh.`);
+  };
+
   const handleDownloadCsv = () => {
-    const headers = ['Rank,Nama Kandidat,Posisi,Skor MFEP,Status\n'];
+    const headers = [
+      'Rank,Nama Kandidat,Kontak,Domisili,Posisi,Jumlah Berkas,Skor MFEP,Status\n'
+    ];
     const rows = rankedCandidates.map(
       (c, i) =>
-        `${i + 1},"${c.name}","${c.roleTarget}",${c.mfepScore},${c.status}`
+        `${i + 1},"${c.name}","${c.phone || '-'}","${c.city || '-'}","${
+          c.roleTarget
+        }",${(c.documents || []).length},${c.mfepScore},${c.status}`
     );
     const blob = new Blob([headers.concat(rows.join('\n'))], {
       type: 'text/csv;charset=utf-8;'
@@ -1840,7 +3240,7 @@ export default function App() {
   };
 
   // ============================================================================
-  // 8. STICKY MATTE FROSTED NAVBAR (PORTAL HANYA MUNCUL SETELAH LOGIN)
+  // 8. STICKY MATTE FROSTED NAVBAR (PORTAL & PROFIL MUNCUL SETELAH LOGIN)
   // ============================================================================
   const renderStickyNavbar = () => (
     <header
@@ -1883,39 +3283,69 @@ export default function App() {
           </button>
 
           {authenticatedRole === 'worker' && (
-            <button
-              type="button"
-              onClick={() => switchView('worker')}
-              className={`nav-link-animated font-semibold ${
-                activeView === 'worker' ? 'active' : ''
-              }`}
-            >
-              Portal Pekerja
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => switchView('worker')}
+                className={`nav-link-animated font-semibold ${
+                  activeView === 'worker' ? 'active' : ''
+                }`}
+              >
+                Portal Pekerja
+              </button>
+              <button
+                type="button"
+                onClick={() => openProfileEditor('worker')}
+                className={`nav-link-animated font-semibold ${
+                  activeView === 'profile' ? 'active' : ''
+                }`}
+              >
+                Profil Saya
+              </button>
+            </>
           )}
 
           {authenticatedRole === 'hrd' && (
-            <button
-              type="button"
-              onClick={() => switchView('hrd')}
-              className={`nav-link-animated font-semibold ${
-                activeView === 'hrd' ? 'active' : ''
-              }`}
-            >
-              Portal Instansi
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => switchView('hrd')}
+                className={`nav-link-animated font-semibold ${
+                  activeView === 'hrd' ? 'active' : ''
+                }`}
+              >
+                Portal Instansi
+              </button>
+              <button
+                type="button"
+                onClick={() => openProfileEditor('hrd')}
+                className={`nav-link-animated font-semibold ${
+                  activeView === 'profile' ? 'active' : ''
+                }`}
+              >
+                Profil Instansi
+              </button>
+            </>
           )}
         </nav>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {authenticatedRole ? (
             <>
+              <button
+                type="button"
+                onClick={() => openProfileEditor(authenticatedRole)}
+                className="btn-pill-secondary px-3.5 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5"
+              >
+                <User className="w-3.5 h-3.5 text-accent-primary" />
+                <span className="hidden sm:inline">Edit Profil</span>
+              </button>
               <button
                 type="button"
                 onClick={() =>
                   switchView(authenticatedRole === 'hrd' ? 'hrd' : 'worker')
                 }
-                className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
+                className="btn-pill-secondary px-3.5 py-2 text-xs sm:text-sm"
               >
                 {authenticatedRole === 'hrd'
                   ? 'Dasbor Instansi'
@@ -3511,319 +4941,800 @@ export default function App() {
   );
 
   // ============================================================================
-  // 11. RENDER VIEW 3: KELOLA PROFIL DASAR 3-STEP WIZARD (UC-02)
+  // 11. RENDER VIEW 3: MEMPERBARUI PROFIL DASAR PEKERJA & INSTANSI (US-07 & US-11)
   // ============================================================================
-  const renderProfileView = () => (
-    <section
-      className="min-h-screen pt-28 pb-20 px-4 sm:px-8 view-transition-enter"
-      style={{ backgroundColor: 'var(--bg-soft)' }}
-    >
-      <div className="max-w-2xl mx-auto harian-surface-card p-7 sm:p-10">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-          <div>
-            <h2 className="heading-tight text-2xl">Complete Your Profile</h2>
-            <p className="text-xs sm:text-sm">
-              Data pengalaman kerja menjadi referensi algoritma rekomendasi lowongan.
-            </p>
-          </div>
-          <button
-            onClick={() => switchView('worker')}
-            className="text-xs font-semibold text-accent-primary hover:underline"
-          >
-            Ke Portal Pekerja &rarr;
-          </button>
-        </div>
+  const renderProfileView = () => {
+    const isWorkerTab = profileRoleTab === 'worker';
+    const wEmptyName = profileSubmittedOnce && !workerProfileDraft.fullName?.trim();
+    const wEmptyPhone = profileSubmittedOnce && !workerProfileDraft.phone?.trim();
+    const wEmptyCity = profileSubmittedOnce && !workerProfileDraft.city?.trim();
+    const wEmptyBio = profileSubmittedOnce && !workerProfileDraft.bio?.trim();
 
-        {/* 3-Step Bar */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
-          {[
-            { s: 1, title: '01 • Personal Data', sub: 'Identitas & Rekening' },
-            { s: 2, title: '02 • Experience', sub: 'Riwayat Kerja Harian' },
-            { s: 3, title: '03 • Completed', sub: 'Siap Melamar' }
-          ].map((item) => (
-            <button
-              key={item.s}
-              onClick={() => setProfileStep(item.s)}
-              className="p-3.5 rounded-2xl border text-left transition"
-              style={{
-                backgroundColor:
-                  profileStep === item.s ? 'var(--bg-soft)' : 'var(--surface)',
-                borderColor:
-                  profileStep === item.s ? 'var(--primary)' : 'var(--border)'
-              }}
-            >
-              <div className="text-[11px] font-mono-metric font-bold text-accent-primary">
-                {item.title}
-              </div>
-              <div
-                className="text-xs font-semibold mt-0.5"
-                style={{ color: 'var(--text)' }}
-              >
-                {item.sub}
-              </div>
-            </button>
-          ))}
-        </div>
+    const hEmptyName = profileSubmittedOnce && !hrdProfileDraft.companyName?.trim();
+    const hEmptyIndustry = profileSubmittedOnce && !hrdProfileDraft.industry?.trim();
+    const hEmptyContact = profileSubmittedOnce && !hrdProfileDraft.picContact?.trim();
+    const hEmptyDesc = profileSubmittedOnce && !hrdProfileDraft.description?.trim();
 
-        {profileStep === 1 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label
-                  className="block text-xs font-semibold mb-1"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Nama Lengkap (Sesuai KTP) *
-                </label>
-                <input
-                  type="text"
-                  value={workerProfile.fullName}
-                  onChange={(e) =>
-                    setWorkerProfile({
-                      ...workerProfile,
-                      fullName: e.target.value
-                    })
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{
-                    backgroundColor: 'var(--bg-soft)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-              <div>
-                <label
-                  className="block text-xs font-semibold mb-1"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Nomor WhatsApp Aktif *
-                </label>
-                <input
-                  type="text"
-                  value={workerProfile.phone}
-                  onChange={(e) =>
-                    setWorkerProfile({
-                      ...workerProfile,
-                      phone: e.target.value
-                    })
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{
-                    backgroundColor: 'var(--bg-soft)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label
-                  className="block text-xs font-semibold mb-1"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Domisili Saat Ini *
-                </label>
-                <input
-                  type="text"
-                  value={workerProfile.city}
-                  onChange={(e) =>
-                    setWorkerProfile({ ...workerProfile, city: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{
-                    backgroundColor: 'var(--bg-soft)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-              <div>
-                <label
-                  className="block text-xs font-semibold mb-1"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Rekening Pencairan Gaji H+2 *
-                </label>
-                <input
-                  type="text"
-                  value={workerProfile.bankAccount}
-                  onChange={(e) =>
-                    setWorkerProfile({
-                      ...workerProfile,
-                      bankAccount: e.target.value
-                    })
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{
-                    backgroundColor: 'var(--bg-soft)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-4">
-              <button
-                onClick={() => {
-                  if (!workerProfile.fullName.trim()) {
-                    triggerToast('Kolom wajib isi tidak boleh kosong!');
-                    return;
-                  }
-                  triggerToast('Profil dasar berhasil diperbarui.');
-                  setProfileStep(2);
+    return (
+      <section
+        className="min-h-screen pt-28 pb-20 px-4 sm:px-8 view-transition-enter"
+        style={{ backgroundColor: 'var(--bg-soft)' }}
+      >
+        <div className="max-w-3xl mx-auto harian-surface-card p-7 sm:p-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div>
+              <span
+                className="inline-block text-xs font-semibold px-3 py-1 rounded-full mb-2"
+                style={{
+                  backgroundColor: 'var(--primary-light)',
+                  color: 'var(--primary)'
                 }}
-                className="btn-pill-primary px-6 py-2.5 text-sm"
               >
-                Simpan &amp; Lanjut ke Pengalaman &rarr;
-              </button>
+                Formulir Profil Digital &bull; Tersimpan Akurat
+              </span>
+              <h2 id="profileFormHeading" className="heading-tight text-2xl">
+                Perbarui Profil Dasar {isWorkerTab ? 'Pekerja Harian' : 'Instansi / HRD'}
+              </h2>
+              <p className="text-xs sm:text-sm mt-0.5">
+                Isi nama, kontak aktif, dan deskripsi singkat secara lengkap lalu tekan Simpan.
+              </p>
             </div>
-          </div>
-        )}
-
-        {profileStep === 2 && (
-          <div className="space-y-4">
-            <div className="space-y-2.5">
-              {workerProfile.experiences.map((exp) => (
-                <div
-                  key={exp.id}
-                  className="p-4 rounded-2xl border flex items-center justify-between"
-                  style={{
-                    backgroundColor: 'var(--bg-soft)',
-                    borderColor: 'var(--border)'
-                  }}
-                >
-                  <div>
-                    <div
-                      className="text-sm font-semibold"
-                      style={{ color: 'var(--text)' }}
-                    >
-                      {exp.role}
-                    </div>
-                    <div className="text-xs">
-                      {exp.company} &bull; {exp.period}
-                    </div>
-                  </div>
-                  <span
-                    className="text-xs font-semibold px-3 py-1 rounded-full"
-                    style={{
-                      backgroundColor: 'var(--primary-light)',
-                      color: 'var(--primary)'
-                    }}
-                  >
-                    Tersimpan
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label
-                  className="block text-xs font-semibold mb-1"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Tambah Posisi Pengalaman
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Staff Gudang Harian"
-                  value={newExpRole}
-                  onChange={(e) => setNewExpRole(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{
-                    backgroundColor: 'var(--bg-soft)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-              <div>
-                <label
-                  className="block text-xs font-semibold mb-1"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Nama Instansi / Perusahaan
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: PT Logistik Cepat"
-                  value={newExpCompany}
-                  onChange={(e) => setNewExpCompany(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{
-                    backgroundColor: 'var(--bg-soft)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-            </div>
-
             <button
               type="button"
-              onClick={handleAddExperience}
-              className="btn-pill-secondary px-4 py-2 text-xs inline-flex items-center gap-1.5"
+              onClick={() =>
+                switchView(
+                  authenticatedRole === 'hrd' || !isWorkerTab ? 'hrd' : 'worker'
+                )
+              }
+              className="btn-pill-secondary px-4 py-2 text-xs font-semibold"
             >
-              <Plus className="w-3.5 h-3.5 text-accent-primary" />
-              <span>Tambahkan ke Portofolio Digital</span>
+              {authenticatedRole === 'hrd' || !isWorkerTab
+                ? 'Ke Dasbor Instansi \u2192'
+                : 'Ke Portal Pekerja \u2192'}
             </button>
-
-            <div className="flex justify-between pt-4">
-              <button
-                onClick={() => setProfileStep(1)}
-                className="btn-pill-secondary px-5 py-2.5 text-sm"
-              >
-                &larr; Kembali
-              </button>
-              <button
-                onClick={() => setProfileStep(3)}
-                className="btn-pill-primary px-6 py-2.5 text-sm"
-              >
-                Selesaikan Profil &rarr;
-              </button>
-            </div>
           </div>
-        )}
 
-        {profileStep === 3 && (
-          <div className="text-center py-6">
+          {/* Role Switcher Tabs (Supports Worker & Instansi in US-07) */}
+          <div className="flex flex-wrap items-center gap-2 pb-5 mb-6 border-b border-[#DCE8FD]">
+            <button
+              type="button"
+              onClick={() => {
+                setProfileRoleTab('worker');
+                setProfileFormFeedback(null);
+                setProfileSubmittedOnce(false);
+              }}
+              className={
+                isWorkerTab
+                  ? 'btn-pill-primary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
+                  : 'btn-pill-secondary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
+              }
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Profil Pekerja Harian</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileRoleTab('hrd');
+                setProfileFormFeedback(null);
+                setProfileSubmittedOnce(false);
+              }}
+              className={
+                !isWorkerTab
+                  ? 'btn-pill-primary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
+                  : 'btn-pill-secondary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
+              }
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Profil Instansi / Perusahaan</span>
+            </button>
+          </div>
+
+          {isWorkerTab && (
+            <nav aria-label="Tahapan Profil Pekerja" className="grid grid-cols-2 gap-3 mb-6">
+              {[
+                {
+                  s: 1,
+                  title: '01 • Profil Dasar (US-07)',
+                  sub: 'Nama, Kontak & Deskripsi Singkat'
+                },
+                {
+                  s: 2,
+                  title: '02 • Pengalaman & Rekening',
+                  sub: 'Portofolio MFEP & Rekening H+2'
+                }
+              ].map((item) => (
+                <button
+                  key={item.s}
+                  type="button"
+                  aria-current={profileStep === item.s ? 'step' : undefined}
+                  onClick={() => setProfileStep(item.s)}
+                  className="p-3.5 rounded-2xl border text-left transition"
+                  style={{
+                    backgroundColor:
+                      profileStep === item.s ? 'var(--bg-soft)' : 'var(--surface)',
+                    borderColor:
+                      profileStep === item.s ? 'var(--primary)' : 'var(--border)'
+                  }}
+                >
+                  <div className="text-[11px] font-mono-metric font-bold text-accent-primary">
+                    {item.title}
+                  </div>
+                  <div
+                    className="text-xs font-semibold mt-0.5"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    {item.sub}
+                  </div>
+                </button>
+              ))}
+            </nav>
+          )}
+
+          {profileFormFeedback && (
             <div
-              className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+              role="alert"
+              className="mb-5 p-4 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center gap-2.5"
               style={{
-                backgroundColor: 'var(--primary-light)',
-                color: 'var(--primary)'
+                backgroundColor:
+                  profileFormFeedback.type === 'error'
+                    ? 'rgba(254, 226, 226, 0.9)'
+                    : 'rgba(220, 252, 231, 0.9)',
+                borderColor:
+                  profileFormFeedback.type === 'error' ? '#DC2626' : '#16A34A',
+                color:
+                  profileFormFeedback.type === 'error' ? '#991B1B' : '#166534'
               }}
             >
-              <CheckCircle2 className="w-8 h-8" />
+              {profileFormFeedback.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              )}
+              <span>{profileFormFeedback.message}</span>
             </div>
-            <h3 className="text-xl font-semibold mb-2">
-              Your profile has been successfully completed!
-            </h3>
-            <p className="text-sm max-w-md mx-auto mb-6">
-              Data profil dan riwayat kerja Anda sudah aktif. Sistem algoritma siap menyodorkan rekomendasi lowongan yang sesuai.
-            </p>
-            <button
-              onClick={() => switchView('worker')}
-              className="btn-pill-primary px-7 py-3 text-sm"
+          )}
+
+          {isWorkerTab && profileStep === 2 ? (
+            <div className="space-y-5">
+              <div
+                className="p-4 sm:p-5 rounded-2xl border space-y-3"
+                style={{
+                  backgroundColor: 'var(--bg-soft)',
+                  borderColor: 'var(--border)'
+                }}
+              >
+                <label
+                  htmlFor="workerBankAccountInput"
+                  className="block text-xs font-semibold"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Nomor Rekening Bank / E-Wallet Pencairan Gaji H+2 *
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <input
+                    id="workerBankAccountInput"
+                    name="bankAccount"
+                    type="text"
+                    aria-invalid="false"
+                    value={workerProfileDraft.bankAccount || ''}
+                    onChange={(e) =>
+                      setWorkerProfileDraft({
+                        ...workerProfileDraft,
+                        bankAccount: e.target.value
+                      })
+                    }
+                    placeholder="Contoh: BCA - 7410889210 (Budi Santoso)"
+                    className="frosted-input flex-1 px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveBankAccount}
+                    className="btn-pill-primary px-5 py-2.5 text-xs sm:text-sm shrink-0"
+                  >
+                    Simpan Rekening
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <div
+                  className="text-xs font-semibold"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Daftar Riwayat Pengalaman Kerja ({workerProfile.experiences.length})
+                </div>
+                {workerProfile.experiences.length === 0 ? (
+                  <p className="text-xs py-3">
+                    Belum ada pengalaman kerja tercatat. Tambahkan di bawah agar skor MFEP meningkat.
+                  </p>
+                ) : (
+                  workerProfile.experiences.map((exp) => (
+                    <div
+                      key={exp.id}
+                      className="p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)'
+                      }}
+                    >
+                      <div>
+                        <div
+                          className="text-sm font-semibold"
+                          style={{ color: 'var(--text)' }}
+                        >
+                          {exp.role}
+                        </div>
+                        <div className="text-xs">
+                          {exp.company} &bull; {exp.period}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingExpId(exp.id);
+                            setNewExpRole(exp.role);
+                            setNewExpCompany(exp.company);
+                            setNewExpPeriod(exp.period);
+                          }}
+                          className="btn-pill-secondary px-3 py-1.5 text-xs inline-flex items-center gap-1"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExperience(exp.id)}
+                          className="btn-pill-secondary px-3 py-1.5 text-xs text-red-600 inline-flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Hapus</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div>
+                  <label
+                    htmlFor="expRoleInput"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Posisi Pengalaman
+                  </label>
+                  <input
+                    id="expRoleInput"
+                    name="expRole"
+                    type="text"
+                    aria-invalid="false"
+                    placeholder="Contoh: Staff Gudang Harian"
+                    value={newExpRole}
+                    onChange={(e) => setNewExpRole(e.target.value)}
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="expCompanyInput"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Nama Instansi / Tempat
+                  </label>
+                  <input
+                    id="expCompanyInput"
+                    name="expCompany"
+                    type="text"
+                    aria-invalid="false"
+                    placeholder="Contoh: PT Logistik Cepat"
+                    value={newExpCompany}
+                    onChange={(e) => setNewExpCompany(e.target.value)}
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="expPeriodInput"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Periode Kerja
+                  </label>
+                  <input
+                    id="expPeriodInput"
+                    name="expPeriod"
+                    type="text"
+                    aria-invalid="false"
+                    placeholder="Contoh: Jan 2025 - Jun 2025"
+                    value={newExpPeriod}
+                    onChange={(e) => setNewExpPeriod(e.target.value)}
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddExperience}
+                  className="btn-pill-secondary px-4 py-2 text-xs inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5 text-accent-primary" />
+                  <span>
+                    {editingExpId
+                      ? 'Perbarui Pengalaman Kerja'
+                      : 'Tambahkan Pengalaman Kerja'}
+                  </span>
+                </button>
+                {editingExpId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingExpId(null);
+                      setNewExpRole('');
+                      setNewExpCompany('');
+                      setNewExpPeriod('2025 - Sekarang');
+                    }}
+                    className="btn-pill-secondary px-3.5 py-2 text-xs"
+                  >
+                    Batal Edit
+                  </button>
+                )}
+              </div>
+
+              <div className="flex justify-between pt-4 border-t border-[#DCE8FD]">
+                <button
+                  type="button"
+                  onClick={() => setProfileStep(1)}
+                  className="btn-pill-secondary px-5 py-2.5 text-sm"
+                >
+                  &larr; Kembali ke Profil Dasar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchView('worker')}
+                  className="btn-pill-primary px-6 py-2.5 text-sm"
+                >
+                  Selesai &amp; Buka Portal Pekerja &rarr;
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form
+              ref={profileFormRef}
+              aria-labelledby="profileFormHeading"
+              noValidate
+              onSubmit={handleSaveBasicProfile}
+              className="space-y-4"
             >
-              Lihat Rekomendasi Lowongan Sekarang
-            </button>
-          </div>
-        )}
-      </div>
-    </section>
-  );
+              {isWorkerTab ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="profWorkerName"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Nama Lengkap (Sesuai KTP) *
+                      </label>
+                      <input
+                        id="profWorkerName"
+                        name="fullName"
+                        type="text"
+                        autoComplete="name"
+                        data-empty={wEmptyName ? 'true' : 'false'}
+                        aria-invalid={wEmptyName ? 'true' : 'false'}
+                        aria-describedby={wEmptyName ? 'errWorkerName' : undefined}
+                        value={workerProfileDraft.fullName}
+                        onChange={(e) => {
+                          setWorkerProfileDraft({
+                            ...workerProfileDraft,
+                            fullName: e.target.value
+                          });
+                          if (profileFormFeedback?.type === 'error') {
+                            setProfileFormFeedback(null);
+                          }
+                        }}
+                        placeholder="Masukkan nama lengkap Anda"
+                        className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                          wEmptyName ? 'field-invalid' : ''
+                        }`}
+                      />
+                      {wEmptyName && (
+                        <span
+                          id="errWorkerName"
+                          className="block text-[11px] font-semibold text-red-600 mt-1"
+                        >
+                          Nama lengkap wajib diisi.
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="profWorkerPhone"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Kontak / Nomor WhatsApp Aktif *
+                      </label>
+                      <input
+                        id="profWorkerPhone"
+                        name="phone"
+                        type="tel"
+                        autoComplete="tel"
+                        data-empty={wEmptyPhone ? 'true' : 'false'}
+                        aria-invalid={wEmptyPhone ? 'true' : 'false'}
+                        aria-describedby={wEmptyPhone ? 'errWorkerPhone' : undefined}
+                        value={workerProfileDraft.phone}
+                        onChange={(e) => {
+                          setWorkerProfileDraft({
+                            ...workerProfileDraft,
+                            phone: e.target.value
+                          });
+                          if (profileFormFeedback?.type === 'error') {
+                            setProfileFormFeedback(null);
+                          }
+                        }}
+                        placeholder="Contoh: +62 812-3456-7890"
+                        className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                          wEmptyPhone ? 'field-invalid' : ''
+                        }`}
+                      />
+                      {wEmptyPhone && (
+                        <span
+                          id="errWorkerPhone"
+                          className="block text-[11px] font-semibold text-red-600 mt-1"
+                        >
+                          Kontak wajib diisi.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="profWorkerCity"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Domisili Saat Ini *
+                      </label>
+                      <input
+                        id="profWorkerCity"
+                        name="city"
+                        type="text"
+                        data-empty={wEmptyCity ? 'true' : 'false'}
+                        aria-invalid={wEmptyCity ? 'true' : 'false'}
+                        aria-describedby={wEmptyCity ? 'errWorkerCity' : undefined}
+                        value={workerProfileDraft.city}
+                        onChange={(e) => {
+                          setWorkerProfileDraft({
+                            ...workerProfileDraft,
+                            city: e.target.value
+                          });
+                          if (profileFormFeedback?.type === 'error') {
+                            setProfileFormFeedback(null);
+                          }
+                        }}
+                        placeholder="Contoh: Bekasi, Jawa Barat"
+                        className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                          wEmptyCity ? 'field-invalid' : ''
+                        }`}
+                      />
+                      {wEmptyCity && (
+                        <span
+                          id="errWorkerCity"
+                          className="block text-[11px] font-semibold text-red-600 mt-1"
+                        >
+                          Domisili wajib diisi.
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="profWorkerBank"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Rekening Pencairan Gaji H+2
+                      </label>
+                      <input
+                        id="profWorkerBank"
+                        name="bankAccount"
+                        type="text"
+                        aria-invalid="false"
+                        value={workerProfileDraft.bankAccount || ''}
+                        onChange={(e) =>
+                          setWorkerProfileDraft({
+                            ...workerProfileDraft,
+                            bankAccount: e.target.value
+                          })
+                        }
+                        placeholder="BCA - No. Rekening (Atas Nama)"
+                        className="frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="profWorkerBio"
+                      className="block text-xs font-semibold mb-1.5"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Deskripsi Singkat Diri &amp; Keahlian *
+                    </label>
+                    <textarea
+                      id="profWorkerBio"
+                      name="bio"
+                      rows="3"
+                      data-empty={wEmptyBio ? 'true' : 'false'}
+                      aria-invalid={wEmptyBio ? 'true' : 'false'}
+                      aria-describedby={wEmptyBio ? 'errWorkerBio' : undefined}
+                      value={workerProfileDraft.bio || ''}
+                      onChange={(e) => {
+                        setWorkerProfileDraft({
+                          ...workerProfileDraft,
+                          bio: e.target.value
+                        });
+                        if (profileFormFeedback?.type === 'error') {
+                          setProfileFormFeedback(null);
+                        }
+                      }}
+                      placeholder="Tuliskan ringkasan pengalaman, keahlian kerja harian, dan kesiapan shift Anda..."
+                      className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                        wEmptyBio ? 'field-invalid' : ''
+                      }`}
+                    />
+                    {wEmptyBio && (
+                      <span
+                        id="errWorkerBio"
+                        className="block text-[11px] font-semibold text-red-600 mt-1"
+                      >
+                        Deskripsi singkat wajib diisi.
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="profHrdName"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Nama Instansi / Perusahaan *
+                      </label>
+                      <input
+                        id="profHrdName"
+                        name="companyName"
+                        type="text"
+                        autoComplete="organization"
+                        data-empty={hEmptyName ? 'true' : 'false'}
+                        aria-invalid={hEmptyName ? 'true' : 'false'}
+                        aria-describedby={hEmptyName ? 'errHrdName' : undefined}
+                        value={hrdProfileDraft.companyName || ''}
+                        onChange={(e) => {
+                          setHrdProfileDraft({
+                            ...hrdProfileDraft,
+                            companyName: e.target.value
+                          });
+                          if (profileFormFeedback?.type === 'error') {
+                            setProfileFormFeedback(null);
+                          }
+                        }}
+                        placeholder="Contoh: PT Karya Maju"
+                        className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                          hEmptyName ? 'field-invalid' : ''
+                        }`}
+                      />
+                      {hEmptyName && (
+                        <span
+                          id="errHrdName"
+                          className="block text-[11px] font-semibold text-red-600 mt-1"
+                        >
+                          Nama instansi wajib diisi.
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="profHrdContact"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Kontak PIC / HRD Aktif *
+                      </label>
+                      <input
+                        id="profHrdContact"
+                        name="picContact"
+                        type="text"
+                        data-empty={hEmptyContact ? 'true' : 'false'}
+                        aria-invalid={hEmptyContact ? 'true' : 'false'}
+                        aria-describedby={hEmptyContact ? 'errHrdContact' : undefined}
+                        value={hrdProfileDraft.picContact || ''}
+                        onChange={(e) => {
+                          setHrdProfileDraft({
+                            ...hrdProfileDraft,
+                            picContact: e.target.value
+                          });
+                          if (profileFormFeedback?.type === 'error') {
+                            setProfileFormFeedback(null);
+                          }
+                        }}
+                        placeholder="Contoh: Rina Wijaya (+62 811-2233-4455)"
+                        className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                          hEmptyContact ? 'field-invalid' : ''
+                        }`}
+                      />
+                      {hEmptyContact && (
+                        <span
+                          id="errHrdContact"
+                          className="block text-[11px] font-semibold text-red-600 mt-1"
+                        >
+                          Kontak PIC instansi wajib diisi.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="profHrdIndustry"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Bidang Industri *
+                      </label>
+                      <input
+                        id="profHrdIndustry"
+                        name="industry"
+                        type="text"
+                        data-empty={hEmptyIndustry ? 'true' : 'false'}
+                        aria-invalid={hEmptyIndustry ? 'true' : 'false'}
+                        aria-describedby={hEmptyIndustry ? 'errHrdIndustry' : undefined}
+                        value={hrdProfileDraft.industry || ''}
+                        onChange={(e) => {
+                          setHrdProfileDraft({
+                            ...hrdProfileDraft,
+                            industry: e.target.value
+                          });
+                          if (profileFormFeedback?.type === 'error') {
+                            setProfileFormFeedback(null);
+                          }
+                        }}
+                        placeholder="Contoh: Logistik / Event / Perhotelan"
+                        className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                          hEmptyIndustry ? 'field-invalid' : ''
+                        }`}
+                      />
+                      {hEmptyIndustry && (
+                        <span
+                          id="errHrdIndustry"
+                          className="block text-[11px] font-semibold text-red-600 mt-1"
+                        >
+                          Bidang industri wajib diisi.
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="profHrdLocation"
+                        className="block text-xs font-semibold mb-1.5"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        Lokasi Operasional Utama
+                      </label>
+                      <input
+                        id="profHrdLocation"
+                        name="location"
+                        type="text"
+                        aria-invalid="false"
+                        value={hrdProfileDraft.location || ''}
+                        onChange={(e) =>
+                          setHrdProfileDraft({
+                            ...hrdProfileDraft,
+                            location: e.target.value
+                          })
+                        }
+                        placeholder="Contoh: Jakarta & Tangerang"
+                        className="frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="profHrdDesc"
+                      className="block text-xs font-semibold mb-1.5"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Deskripsi Singkat Instansi *
+                    </label>
+                    <textarea
+                      id="profHrdDesc"
+                      name="description"
+                      rows="3"
+                      data-empty={hEmptyDesc ? 'true' : 'false'}
+                      aria-invalid={hEmptyDesc ? 'true' : 'false'}
+                      aria-describedby={hEmptyDesc ? 'errHrdDesc' : undefined}
+                      value={hrdProfileDraft.description || ''}
+                      onChange={(e) => {
+                        setHrdProfileDraft({
+                          ...hrdProfileDraft,
+                          description: e.target.value
+                        });
+                        if (profileFormFeedback?.type === 'error') {
+                          setProfileFormFeedback(null);
+                        }
+                      }}
+                      placeholder="Jelaskan profil singkat perusahaan, ruang lingkup operasional, dan komitmen kerja harian..."
+                      className={`frosted-input w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none ${
+                        hEmptyDesc ? 'field-invalid' : ''
+                      }`}
+                    />
+                    {hEmptyDesc && (
+                      <span
+                        id="errHrdDesc"
+                        className="block text-[11px] font-semibold text-red-600 mt-1"
+                      >
+                        Deskripsi singkat instansi wajib diisi.
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[#DCE8FD]">
+                <span className="text-xs text-[#526382]">
+                  Tanda (*) wajib diisi sebelum menekan tombol Simpan.
+                </span>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {isWorkerTab && (
+                    <button
+                      type="button"
+                      onClick={() => setProfileStep(2)}
+                      className="btn-pill-secondary px-4 py-2.5 text-xs sm:text-sm"
+                    >
+                      Kelola Pengalaman &rarr;
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="btn-pill-primary px-7 py-2.5 text-xs sm:text-sm inline-flex items-center gap-2"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Simpan</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+        </div>
+      </section>
+    );
+  };
 
   // ============================================================================
-  // 12. RENDER VIEW 4: PORTAL PEKERJA HARIAN (UC-04, UC-05, UC-06, UC-07, UC-12, UC-13)
+  // 12. RENDER VIEW 4: PORTAL PEKERJA HARIAN (UC-05, US-07, US-10, UC-12)
   // ============================================================================
   const renderWorkerPortalView = () => {
     const modalJob = jobDetailModalId
-      ? jobs.find((j) => j.id === jobDetailModalId) || null
+      ? jobs.find((j) => j.id === jobDetailModalId && j.status !== 'CLOSED') ||
+        null
       : null;
     const alreadyAppliedModal = modalJob
       ? applications.some(
@@ -3853,13 +5764,15 @@ export default function App() {
               <h2 className="heading-tight text-2xl sm:text-3xl">
                 Temukan Kerja Harian Sekarang
               </h2>
-              <p className="text-xs sm:text-sm mt-0.5">
-                Rekomendasi diurutkan otomatis berdasarkan pengalaman kerja Anda. Dana upah telah diamankan di Escrow dan cair maksimal H+2.
+              <p className="text-xs sm:text-sm mt-0.5 max-w-2xl">
+                {workerProfile.bio ||
+                  'Rekomendasi diurutkan otomatis berdasarkan pengalaman kerja Anda. Dana upah telah diamankan di Escrow dan cair maksimal H+2.'}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
               <button
+                type="button"
                 onClick={() => setWorkerSubTab('explore')}
                 className={
                   workerSubTab === 'explore'
@@ -3867,9 +5780,10 @@ export default function App() {
                     : 'btn-pill-secondary px-5 py-2.5 text-xs sm:text-sm'
                 }
               >
-                Cari &amp; Filter Lowongan
+                Cari &amp; Filter Lowongan ({filteredJobs.length})
               </button>
               <button
+                type="button"
                 onClick={() => setWorkerSubTab('applications')}
                 className={
                   workerSubTab === 'applications'
@@ -3888,160 +5802,187 @@ export default function App() {
                   {applications.length}
                 </span>
               </button>
+              <button
+                type="button"
+                onClick={() => openProfileEditor('worker')}
+                className="btn-pill-secondary px-4 py-2.5 text-xs sm:text-sm inline-flex items-center gap-1.5"
+              >
+                <Pencil className="w-3.5 h-3.5 text-accent-primary" />
+                <span>Perbarui Profil</span>
+              </button>
             </div>
           </div>
 
           {workerSubTab === 'explore' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Left Sidebar Filter (UC-05) */}
-              <aside className="lg:col-span-3 harian-surface-card p-5 sm:p-6 self-start space-y-4">
-                <div
-                  className="flex items-center justify-between pb-3 border-b"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  <h3 className="text-sm font-semibold">Filter Pencarian</h3>
-                  <button
-                    onClick={() => {
-                      setFilterKeyword('');
-                      setFilterLocation('ALL');
-                      setFilterCategory('ALL');
-                      setFilterShift('ALL');
-                      setFilterMinRate('');
-                    }}
-                    className="text-xs font-semibold text-accent-primary hover:underline"
+              <aside className="lg:col-span-3 harian-surface-card p-5 sm:p-6 self-start">
+                <search className="space-y-4 block">
+                  <div
+                    className="flex items-center justify-between pb-3 border-b"
+                    style={{ borderColor: 'var(--border)' }}
                   >
-                    Reset
-                  </button>
-                </div>
+                    <h3 className="text-sm font-semibold">Filter Pencarian</h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterKeyword('');
+                        setFilterLocation('ALL');
+                        setFilterCategory('ALL');
+                        setFilterShift('ALL');
+                        setFilterMinRate('');
+                      }}
+                      className="text-xs font-semibold text-accent-primary hover:underline"
+                    >
+                      Reset
+                    </button>
+                  </div>
 
-                <div>
-                  <label
-                    className="block text-xs font-semibold mb-1"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    Kata Kunci Posisi / Perusahaan
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Packer, SPG, Waiter..."
-                    value={filterKeyword}
-                    onChange={(e) => setFilterKeyword(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border text-xs"
-                    style={{
-                      backgroundColor: 'var(--bg-soft)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text)'
-                    }}
-                  />
-                </div>
+                  <div>
+                    <label
+                      htmlFor="filterKwInput"
+                      className="block text-xs font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Kata Kunci Posisi / Perusahaan
+                    </label>
+                    <input
+                      id="filterKwInput"
+                      type="search"
+                      aria-invalid="false"
+                      placeholder="Packer, SPG, Waiter..."
+                      value={filterKeyword}
+                      onChange={(e) => setFilterKeyword(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border text-xs"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text)'
+                      }}
+                    />
+                  </div>
 
-                <div>
-                  <label
-                    className="block text-xs font-semibold mb-1"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    Lokasi Kerja
-                  </label>
-                  <select
-                    value={filterLocation}
-                    onChange={(e) => setFilterLocation(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border text-xs"
-                    style={{
-                      backgroundColor: 'var(--bg-soft)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text)'
-                    }}
-                  >
-                    <option value="ALL">Semua Lokasi</option>
-                    <option value="Bekasi">Bekasi</option>
-                    <option value="Jakarta">Jakarta</option>
-                    <option value="ICE BSD">ICE BSD / Tangerang</option>
-                  </select>
-                </div>
+                  <div>
+                    <label
+                      htmlFor="filterLocSelect"
+                      className="block text-xs font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Lokasi Kerja
+                    </label>
+                    <select
+                      id="filterLocSelect"
+                      aria-invalid="false"
+                      value={filterLocation}
+                      onChange={(e) => setFilterLocation(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border text-xs"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text)'
+                      }}
+                    >
+                      <option value="ALL">Semua Lokasi</option>
+                      <option value="Bekasi">Bekasi</option>
+                      <option value="Jakarta">Jakarta</option>
+                      <option value="ICE BSD">ICE BSD / Tangerang</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label
-                    className="block text-xs font-semibold mb-1"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    Kategori Pekerjaan
-                  </label>
-                  <select
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border text-xs"
-                    style={{
-                      backgroundColor: 'var(--bg-soft)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text)'
-                    }}
-                  >
-                    <option value="ALL">Semua Kategori</option>
-                    <option value="Logistics & Warehouse">
-                      Logistics &amp; Warehouse
-                    </option>
-                    <option value="Event Staff">Event Staff</option>
-                    <option value="Hospitality">Hospitality</option>
-                  </select>
-                </div>
+                  <div>
+                    <label
+                      htmlFor="filterCatSelect"
+                      className="block text-xs font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Kategori Pekerjaan
+                    </label>
+                    <select
+                      id="filterCatSelect"
+                      aria-invalid="false"
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border text-xs"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text)'
+                      }}
+                    >
+                      <option value="ALL">Semua Kategori</option>
+                      <option value="Logistics & Warehouse">
+                        Logistics &amp; Warehouse
+                      </option>
+                      <option value="Event Staff">Event Staff</option>
+                      <option value="Hospitality">Hospitality</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label
-                    className="block text-xs font-semibold mb-1"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    Jadwal Shift
-                  </label>
-                  <select
-                    value={filterShift}
-                    onChange={(e) => setFilterShift(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border text-xs"
-                    style={{
-                      backgroundColor: 'var(--bg-soft)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text)'
-                    }}
-                  >
-                    <option value="ALL">Semua Shift</option>
-                    <option value="Morning Shift">Shift Pagi</option>
-                    <option value="Night Shift">Shift Malam</option>
-                  </select>
-                </div>
+                  <div>
+                    <label
+                      htmlFor="filterShiftSelect"
+                      className="block text-xs font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Jadwal Shift
+                    </label>
+                    <select
+                      id="filterShiftSelect"
+                      aria-invalid="false"
+                      value={filterShift}
+                      onChange={(e) => setFilterShift(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border text-xs"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text)'
+                      }}
+                    >
+                      <option value="ALL">Semua Shift</option>
+                      <option value="Morning Shift">Shift Pagi</option>
+                      <option value="Night Shift">Shift Malam</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label
-                    className="block text-xs font-semibold mb-1"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    Upah Minimum Harian (Rp)
-                  </label>
-                  <input
-                    type="number"
-                    step="10000"
-                    placeholder="Contoh: 160000"
-                    value={filterMinRate}
-                    onChange={(e) => setFilterMinRate(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border text-xs font-mono-metric"
-                    style={{
-                      backgroundColor: 'var(--bg-soft)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text)'
-                    }}
-                  />
-                </div>
+                  <div>
+                    <label
+                      htmlFor="filterMinRateInput"
+                      className="block text-xs font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Upah Minimum Harian (Rp)
+                    </label>
+                    <input
+                      id="filterMinRateInput"
+                      type="number"
+                      step="10000"
+                      aria-invalid="false"
+                      placeholder="Contoh: 160000"
+                      value={filterMinRate}
+                      onChange={(e) => setFilterMinRate(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border text-xs font-mono-metric"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text)'
+                      }}
+                    />
+                  </div>
+                </search>
               </aside>
 
-              {/* Right Column: Job List + Selected Job Detail */}
+              {/* Right Column: Active Job List + Apply Modal with Document Upload (US-10) */}
               <div className="lg:col-span-9 space-y-6">
                 {filteredJobs.length === 0 ? (
                   <div className="harian-surface-card p-8 text-center">
                     <h4 className="text-base font-semibold mb-1">
-                      Tidak ada lowongan yang sesuai dengan filter Anda.
+                      Tidak ada lowongan aktif yang sesuai dengan filter Anda.
                     </h4>
                     <p className="text-xs mb-4">
-                      Silakan ubah parameter filter lokasi, shift, atau nominal upah minimum.
+                      Lowongan yang telah ditutup atau dihapus oleh instansi otomatis disembunyikan dari pencarian aktif.
                     </p>
                     <button
+                      type="button"
                       onClick={() => {
                         setFilterKeyword('');
                         setFilterLocation('ALL');
@@ -4063,6 +6004,7 @@ export default function App() {
                           key={job.id}
                           onClick={() => {
                             setSelectedJobId(job.id);
+                            setApplyUploadError('');
                             setJobDetailModalId(job.id);
                           }}
                           className="harian-surface-card p-5 cursor-pointer hover:border-[#1D6FE8] transition"
@@ -4103,7 +6045,7 @@ export default function App() {
                               <div className="text-[11px]">{job.workTime}</div>
                             </div>
                             <span className="text-xs font-semibold text-accent-primary">
-                              Detail &amp; Lamar &rarr;
+                              Detail &amp; Unggah Berkas &rarr;
                             </span>
                           </div>
                         </div>
@@ -4112,7 +6054,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Popup Window Modal Detail Informasi Lowongan & Lamar */}
+                {/* Popup Window Modal Detail Informasi Lowongan & Unggah Berkas Lamaran (US-10) */}
                 {modalJob && (
                   <div
                     onClick={() => setJobDetailModalId(null)}
@@ -4124,7 +6066,7 @@ export default function App() {
                   >
                     <div
                       onClick={(e) => e.stopPropagation()}
-                      className="harian-surface-card max-w-xl w-full p-6 sm:p-7 max-h-[90vh] overflow-y-auto view-transition-enter"
+                      className="harian-surface-card max-w-2xl w-full p-6 sm:p-7 max-h-[90vh] overflow-y-auto view-transition-enter"
                     >
                       <div
                         className="flex items-start justify-between gap-3 pb-4 mb-4 border-b"
@@ -4250,49 +6192,178 @@ export default function App() {
                         </p>
                       </div>
 
+                      {/* US-10: Unggah Dokumen Persyaratan Lamaran */}
+                      {!alreadyAppliedModal && (
+                        <div
+                          className="p-4 rounded-2xl border mb-4 space-y-3"
+                          style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.78)',
+                            borderColor: 'var(--border-subtle)'
+                          }}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <h4
+                                className="text-xs sm:text-sm font-bold"
+                                style={{ color: 'var(--text)' }}
+                              >
+                                Unggah Dokumen Persyaratan Lamaran
+                              </h4>
+                              <p className="text-[11px]">
+                                Format didukung: PDF, JPG, PNG, DOC, DOCX &bull; Maksimal 5 MB per berkas. Berkas otomatis terhubung ke dashboard HRD.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleQuickFillVerifiedDocs}
+                              className="btn-pill-secondary px-3 py-1.5 text-[11px] inline-flex items-center gap-1"
+                            >
+                              <FileText className="w-3 h-3 text-accent-primary" />
+                              <span>Gunakan Berkas Tersimpan</span>
+                            </button>
+                          </div>
+
+                          {applyUploadError && (
+                            <div
+                              role="alert"
+                              className="p-3 rounded-xl border border-red-400 bg-red-50 text-red-800 text-xs font-semibold flex items-center gap-2"
+                            >
+                              <AlertCircle className="w-4 h-4 shrink-0" />
+                              <span>{applyUploadError}</span>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            {[
+                              {
+                                key: 'CV',
+                                label: 'CV / Riwayat Hidup *',
+                                inputId: 'applyUploadCv'
+                              },
+                              {
+                                key: 'KTP',
+                                label: 'Foto / Scan KTP *',
+                                inputId: 'applyUploadKtp'
+                              },
+                              {
+                                key: 'Surat Pendukung',
+                                label: 'Surat Pendukung (Opsional)',
+                                inputId: 'applyUploadSk'
+                              }
+                            ].map((slot) => {
+                              const currentDoc = applyUploadDocs[slot.key];
+                              return (
+                                <div
+                                  key={slot.key}
+                                  className="p-3 rounded-xl border flex flex-col justify-between gap-2"
+                                  style={{
+                                    backgroundColor: 'var(--bg-soft)',
+                                    borderColor: currentDoc
+                                      ? '#16A34A'
+                                      : 'var(--border)'
+                                  }}
+                                >
+                                  <div>
+                                    <div
+                                      className="text-[11px] font-bold"
+                                      style={{ color: 'var(--text)' }}
+                                    >
+                                      {slot.label}
+                                    </div>
+                                    {currentDoc ? (
+                                      <div className="mt-1">
+                                        <div className="text-[11px] font-semibold text-emerald-700 truncate">
+                                          {currentDoc.fileName}
+                                        </div>
+                                        <div className="text-[10px] font-mono-metric text-[#526382]">
+                                          {formatFileSize(currentDoc.fileSize)} &bull; Siap Unggah
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="text-[10px] text-[#526382] mt-1">
+                                        Belum ada file dipilih
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      id={slot.inputId}
+                                      type="file"
+                                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                      aria-invalid="false"
+                                      onChange={(e) =>
+                                        handleSelectApplyFile(slot.key, e)
+                                      }
+                                      className="visually-hidden"
+                                    />
+                                    <label
+                                      htmlFor={slot.inputId}
+                                      className="btn-pill-secondary px-2.5 py-1.5 text-[11px] cursor-pointer inline-flex items-center gap-1 flex-1 justify-center"
+                                    >
+                                      <Upload className="w-3 h-3 text-accent-primary" />
+                                      <span>
+                                        {currentDoc ? 'Ganti File' : 'Pilih File'}
+                                      </span>
+                                    </label>
+                                    {currentDoc && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setApplyUploadDocs((prev) => ({
+                                            ...prev,
+                                            [slot.key]: null
+                                          }))
+                                        }
+                                        className="p-1.5 rounded-lg bg-white/80 hover:bg-red-50 text-red-600 border border-red-200"
+                                        aria-label={`Hapus berkas ${slot.key}`}
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       <div
-                        className="pt-4 border-t space-y-3"
+                        className="pt-4 border-t flex flex-wrap items-center justify-end gap-2.5"
                         style={{ borderColor: 'var(--border)' }}
                       >
-                        <div className="text-[11px]">
-                          Berkas Terlampir:{' '}
-                          <strong style={{ color: 'var(--text)' }}>
-                            KTP_{workerProfile.fullName.replace(/\s+/g, '')}
-                            _Verified.pdf (Siap Kirim)
-                          </strong>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-end gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setJobDetailModalId(null)}
+                          className="btn-pill-secondary px-4 py-2.5 text-xs"
+                        >
+                          Tutup
+                        </button>
+                        {alreadyAppliedModal ? (
                           <button
                             type="button"
-                            onClick={() => setJobDetailModalId(null)}
-                            className="btn-pill-secondary px-4 py-2.5 text-xs"
+                            onClick={() => {
+                              setJobDetailModalId(null);
+                              setWorkerSubTab('applications');
+                            }}
+                            className="btn-pill-primary px-5 py-2.5 text-xs"
                           >
-                            Tutup
+                            Sudah Dilamar &bull; Pantau Status &rarr;
                           </button>
-                          {alreadyAppliedModal ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setJobDetailModalId(null);
-                                setWorkerSubTab('applications');
-                              }}
-                              className="btn-pill-primary px-5 py-2.5 text-xs"
-                            >
-                              Sudah Dilamar &bull; Pantau Status &rarr;
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleApplyToJob(modalJob);
-                                setJobDetailModalId(null);
-                              }}
-                              className="btn-pill-primary px-6 py-2.5 text-xs"
-                            >
-                              Lamar Sekarang &amp; Kirim Dokumen
-                            </button>
-                          )}
-                        </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const ok = handleApplyToJob(modalJob);
+                              if (ok) setJobDetailModalId(null);
+                            }}
+                            className="btn-pill-primary px-6 py-2.5 text-xs inline-flex items-center gap-1.5"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Unggah &amp; Kirim Lamaran</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -4300,7 +6371,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* Worker Sub-Tab: Real-Time Application Tracking & H+2 Salary Payout (UC-07 & UC-12) */
+            /* Worker Sub-Tab: Real-Time Application Tracking, Attached Docs & H+2 Salary Payout */
             <div className="harian-surface-card p-6 sm:p-8">
               <div
                 className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-5 mb-6 border-b"
@@ -4311,7 +6382,7 @@ export default function App() {
                     Pelacakan Status Lamaran Real-Time &amp; Pencairan Gaji H+2
                   </h3>
                   <p className="text-xs sm:text-sm">
-                    Lamaran berstatus Pending dapat dibatalkan kapan saja. Setelah pekerjaan ditandai selesai, upah cair otomatis maksimal H+2.
+                    Berkas persyaratan Anda terhubung langsung ke HRD. Lamaran berstatus Pending dapat dibatalkan kapan saja.
                   </p>
                 </div>
                 <span
@@ -4331,14 +6402,14 @@ export default function App() {
                   return (
                     <div
                       key={app.id}
-                      className="p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      className="p-5 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4"
                       style={{
                         backgroundColor: 'var(--bg-soft)',
                         borderColor: 'var(--border)'
                       }}
                     >
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span
                             className="text-xs font-semibold px-3 py-0.5 rounded-full"
                             style={{
@@ -4353,7 +6424,7 @@ export default function App() {
                         <h4 className="text-base font-semibold">
                           {app.jobTitle}
                         </h4>
-                        <div className="text-xs mt-0.5">
+                        <div className="text-xs">
                           {app.company} &bull; Upah Kotor:{' '}
                           <span className="font-mono-metric">
                             {formatRupiah(app.rate)}
@@ -4363,11 +6434,39 @@ export default function App() {
                             {formatRupiah(netSalary)}
                           </strong>
                         </div>
+
+                        {Array.isArray(app.documents) &&
+                          app.documents.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[11px] font-semibold text-[#526382]">
+                                Berkas Terkirim:
+                              </span>
+                              {app.documents.map((doc) => (
+                                <button
+                                  key={doc.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewDocModal({
+                                      doc,
+                                      ownerName: workerProfile.fullName
+                                    })
+                                  }
+                                  className="px-2.5 py-1 rounded-lg bg-white/85 hover:bg-white border border-[#CBDDFC] text-[11px] font-semibold text-[#1D6FE8] inline-flex items-center gap-1 transition"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  <span>
+                                    {doc.docType}: {doc.fileName}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {app.status === 'Pending' ? (
                           <button
+                            type="button"
                             onClick={() => handleCancelApplication(app.id)}
                             className="btn-pill-secondary px-4 py-2 text-xs"
                           >
@@ -4382,7 +6481,7 @@ export default function App() {
                             }}
                           >
                             {app.status === 'Gaji Cair H+2'
-                              ? 'Telah Ditransfer ke BCA'
+                              ? 'Telah Ditransfer ke Rekening'
                               : 'Keputusan Terkunci'}
                           </span>
                         )}
@@ -4399,346 +6498,659 @@ export default function App() {
   };
 
   // ============================================================================
-  // 13. RENDER VIEW 5: PORTAL PERUSAHAAN / HRD (UC-03, UC-08, UC-09, UC-10, UC-11)
+  // 13. RENDER VIEW 5: PORTAL PERUSAHAAN / HRD (US-07, US-08, US-12, MFEP, US-17)
   // ============================================================================
-  const renderHrdPortalView = () => (
-    <section
-      className="min-h-screen pt-24 pb-20 px-4 sm:px-8 view-transition-enter"
-      style={{ backgroundColor: 'var(--bg-soft)' }}
-    >
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Sidebar HRD */}
-        <aside className="lg:col-span-3 harian-surface-card p-6 self-start flex flex-col justify-between min-h-[520px]">
-          <div className="space-y-5">
-            <div
-              className="pb-4 border-b"
-              style={{ borderColor: 'var(--border)' }}
-            >
-              <div className="text-xs font-bold text-accent-primary">
-                PORTAL INSTANSI &amp; HRD
-              </div>
-              <div
-                className="text-lg font-semibold mt-0.5"
-                style={{ color: 'var(--text)' }}
-              >
-                PT Karya Maju
-              </div>
-              <div className="text-xs mt-2">Saldo HarianPay Korporat:</div>
-              <div className="text-lg font-bold font-mono-metric text-accent-primary">
-                {formatRupiah(hrdWalletBalance)}
-              </div>
-            </div>
+  const renderHrdPortalView = () => {
+    const totalEscrowHeld = jobs
+      .filter((j) => j.escrowStage === 'HELD')
+      .reduce((acc, j) => acc + Number(j.escrowHeld || 0), 0);
+    const totalPaidOutH2 = jobs
+      .filter((j) => j.escrowStage === 'PAID_H2')
+      .reduce((acc, j) => acc + Number(j.escrowHeld || 0), 0);
 
-            <div className="space-y-2">
-              {[
-                {
-                  id: 'jobs',
-                  label: 'Kelola Lowongan',
-                  badge: jobs.length
-                },
-                {
-                  id: 'mfep',
-                  label: 'Seleksi Kandidat MFEP',
-                  badge: 'Otomatis'
-                },
-                {
-                  id: 'escrow',
-                  label: 'Escrow & Gaji H+2',
-                  badge: 'HarianPay'
-                }
-              ].map((tab) => {
-                const active = hrdSubTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setHrdSubTab(tab.id)}
-                    className="w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-between"
-                    style={{
-                      backgroundColor: active
-                        ? 'var(--primary)'
-                        : 'transparent',
-                      color: active ? '#FFFFFF' : 'var(--text)'
-                    }}
-                  >
-                    <span>{tab.label}</span>
-                    <span
-                      className="text-[11px] font-mono-metric px-2 py-0.5 rounded-full"
+    return (
+      <section
+        className="min-h-screen pt-24 pb-20 px-4 sm:px-8 view-transition-enter"
+        style={{ backgroundColor: 'var(--bg-soft)' }}
+      >
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Sidebar HRD */}
+          <aside className="lg:col-span-3 harian-surface-card p-6 self-start flex flex-col justify-between min-h-[560px]">
+            <div className="space-y-5">
+              <div
+                className="pb-4 border-b"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <div className="text-xs font-bold text-accent-primary">
+                  PORTAL INSTANSI &amp; HRD
+                </div>
+                <div
+                  className="text-lg font-semibold mt-0.5"
+                  style={{ color: 'var(--text)' }}
+                >
+                  {hrdProfile.companyName}
+                </div>
+                <div className="text-[11px] text-[#526382] mt-0.5">
+                  {hrdProfile.industry} &bull; {hrdProfile.picContact}
+                </div>
+                <div className="text-xs mt-3">Saldo HarianPay Korporat:</div>
+                <div className="text-lg font-bold font-mono-metric text-accent-primary">
+                  {formatRupiah(hrdWalletBalance)}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openPaymentGatewayModal('TOPUP', 2500000)}
+                  className="mt-2 text-xs font-semibold text-accent-primary hover:underline inline-flex items-center gap-1"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>+ Top-Up via Payment Gateway</span>
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  {
+                    id: 'jobs',
+                    label: 'Kelola Lowongan',
+                    badge: jobs.length
+                  },
+                  {
+                    id: 'applicants',
+                    label: 'Kelola Pelamar',
+                    badge: candidates.length
+                  },
+                  {
+                    id: 'mfep',
+                    label: 'Seleksi Kandidat MFEP',
+                    badge: 'Otomatis'
+                  },
+                  {
+                    id: 'escrow',
+                    label: 'Pemroses Pembayaran & Escrow',
+                    badge: 'HarianPay'
+                  }
+                ].map((tab) => {
+                  const active = hrdSubTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setHrdSubTab(tab.id)}
+                      className="w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-between"
                       style={{
                         backgroundColor: active
-                          ? 'rgba(255,255,255,0.2)'
-                          : 'var(--primary-light)',
-                        color: active ? '#FFFFFF' : 'var(--primary)'
+                          ? 'var(--primary)'
+                          : 'transparent',
+                        color: active ? '#FFFFFF' : 'var(--text)'
                       }}
                     >
-                      {tab.badge}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div
-            className="pt-6 border-t space-y-2.5"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            <button
-              onClick={() => {
-                setCreateJobError('');
-                setShowCreateJobModal(true);
-              }}
-              className="btn-pill-primary w-full py-3 text-xs sm:text-sm inline-flex items-center justify-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Pasang Lowongan Baru</span>
-            </button>
-            <button
-              onClick={handleDownloadCsv}
-              className="btn-pill-secondary w-full py-2.5 text-xs inline-flex items-center justify-center gap-1.5"
-            >
-              <Download className="w-4 h-4 text-accent-primary" />
-              <span>Unduh Laporan Rekrutmen (CSV)</span>
-            </button>
-          </div>
-        </aside>
-
-        {/* Right Main HRD Content */}
-        <div className="lg:col-span-9">
-          {hrdSubTab === 'jobs' && (
-            <div className="harian-surface-card p-6 sm:p-8">
-              <div
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <div>
-                  <h2 className="heading-tight text-2xl">
-                    Kelola Lowongan Pekerjaan
-                  </h2>
-                  <p className="text-xs sm:text-sm">
-                    Setiap publikasi lowongan baru otomatis mengunci dana upah (Kuota &times; Upah) di rekening bersama HarianPay.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setCreateJobError('');
-                    setShowCreateJobModal(true);
-                  }}
-                  className="btn-pill-primary px-5 py-2.5 text-xs sm:text-sm self-start sm:self-auto"
-                >
-                  + Pasang Lowongan Baru
-                </button>
+                      <span>{tab.label}</span>
+                      <span
+                        className="text-[11px] font-mono-metric px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: active
+                            ? 'rgba(255,255,255,0.2)'
+                            : 'var(--primary-light)',
+                          color: active ? '#FFFFFF' : 'var(--primary)'
+                        }}
+                      >
+                        {tab.badge}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+            </div>
 
-              <div className="space-y-3.5">
-                {jobs.map((job) => (
-                  <div
-                    key={job.id}
-                    className="p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    style={{
-                      backgroundColor: 'var(--bg-soft)',
-                      borderColor: 'var(--border)'
+            <div
+              className="pt-6 border-t space-y-2.5"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateJobError('');
+                  setShowCreateJobModal(true);
+                }}
+                className="btn-pill-primary w-full py-3 text-xs sm:text-sm inline-flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Pasang Lowongan Baru</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openProfileEditor('hrd')}
+                className="btn-pill-secondary w-full py-2.5 text-xs inline-flex items-center justify-center gap-1.5"
+              >
+                <Pencil className="w-3.5 h-3.5 text-accent-primary" />
+                <span>Perbarui Profil Instansi</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                className="btn-pill-secondary w-full py-2.5 text-xs inline-flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-4 h-4 text-accent-primary" />
+                <span>Unduh Laporan Rekrutmen (CSV)</span>
+              </button>
+            </div>
+          </aside>
+
+          {/* Right Main HRD Content */}
+          <div className="lg:col-span-9">
+            {/* TAB 1: KELOLA LOWONGAN (US-08: Create, Edit, Close/Reopen, Delete) */}
+            {hrdSubTab === 'jobs' && (
+              <div className="harian-surface-card p-6 sm:p-8">
+                <div
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-5 border-b"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <div>
+                    <h2 className="heading-tight text-2xl">
+                      Kelola Lowongan Pekerjaan
+                    </h2>
+                    <p className="text-xs sm:text-sm">
+                      Edit detail lowongan, tutup rekrutmen, atau hapus lowongan. Lowongan yang ditutup/dihapus otomatis tidak muncul di pencarian aktif pelamar.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateJobError('');
+                      setShowCreateJobModal(true);
                     }}
+                    className="btn-pill-primary px-5 py-2.5 text-xs sm:text-sm self-start sm:self-auto"
                   >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span
-                          className="text-xs font-semibold px-3 py-0.5 rounded-full"
+                    + Pasang Lowongan Baru
+                  </button>
+                </div>
+
+                {/* Status Filter Pills */}
+                <div className="flex flex-wrap items-center gap-2 mb-5">
+                  {[
+                    { id: 'ALL', label: `Semua (${jobs.length})` },
+                    {
+                      id: 'OPEN',
+                      label: `Aktif (${
+                        jobs.filter((j) => (j.status || 'OPEN') === 'OPEN').length
+                      })`
+                    },
+                    {
+                      id: 'CLOSED',
+                      label: `Ditutup (${
+                        jobs.filter((j) => j.status === 'CLOSED').length
+                      })`
+                    },
+                    {
+                      id: 'COMPLETED',
+                      label: `Selesai H+2 (${
+                        jobs.filter((j) => j.status === 'COMPLETED').length
+                      })`
+                    }
+                  ].map((pill) => (
+                    <button
+                      key={pill.id}
+                      type="button"
+                      onClick={() => setHrdJobStatusFilter(pill.id)}
+                      className={
+                        hrdJobStatusFilter === pill.id
+                          ? 'btn-pill-primary px-3.5 py-1.5 text-xs'
+                          : 'btn-pill-secondary px-3.5 py-1.5 text-xs'
+                      }
+                    >
+                      {pill.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-3.5">
+                  {hrdFilteredJobs.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl border border-dashed border-[#CBDDFC]">
+                      <p className="text-xs sm:text-sm font-semibold">
+                        Tidak ada lowongan pada kategori status ini.
+                      </p>
+                    </div>
+                  ) : (
+                    hrdFilteredJobs.map((job) => {
+                      const isClosed = job.status === 'CLOSED';
+                      const isCompleted =
+                        job.escrowStage === 'PAID_H2' ||
+                        job.status === 'COMPLETED';
+
+                      return (
+                        <div
+                          key={job.id}
+                          className="p-5 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4"
                           style={{
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)'
+                            backgroundColor: isClosed
+                              ? 'rgba(241, 245, 249, 0.85)'
+                              : 'var(--bg-soft)',
+                            borderColor: 'var(--border)'
                           }}
                         >
-                          {job.escrowStage === 'PAID_H2'
-                            ? 'SELESAI • GAJI CAIR H+2'
-                            : 'AKTIF • ESCROW TERKUNCI'}
-                        </span>
-                        <span className="text-xs font-mono-metric">
-                          Dana Ditahan: {formatRupiah(job.escrowHeld)}
-                        </span>
-                      </div>
-                      <h4 className="text-base font-semibold">{job.title}</h4>
-                      <div className="text-xs mt-0.5">
-                        {job.location} &bull;{' '}
-                        <strong className="font-mono-metric text-accent-primary">
-                          {formatRupiah(job.rate)}/hari
-                        </strong>{' '}
-                        &bull; {job.applicantsCount} Pelamar ({job.quota} Kuota)
-                      </div>
-                    </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <span
+                                className="text-xs font-semibold px-3 py-0.5 rounded-full"
+                                style={{
+                                  backgroundColor: isClosed
+                                    ? 'rgba(254, 226, 226, 0.9)'
+                                    : isCompleted
+                                    ? 'rgba(220, 252, 231, 0.9)'
+                                    : 'var(--primary-light)',
+                                  color: isClosed
+                                    ? '#B91C1C'
+                                    : isCompleted
+                                    ? '#15803D'
+                                    : 'var(--primary)'
+                                }}
+                              >
+                                {isClosed
+                                  ? 'DITUTUP • DISEMBUNYIKAN DARI PELAMAR'
+                                  : isCompleted
+                                  ? 'SELESAI • GAJI CAIR H+2'
+                                  : 'AKTIF • ESCROW TERKUNCI'}
+                              </span>
+                              <span className="text-xs font-mono-metric">
+                                Dana Ditahan: {formatRupiah(job.escrowHeld)}
+                              </span>
+                            </div>
+                            <h4 className="text-base font-semibold">
+                              {job.title}
+                            </h4>
+                            <div className="text-xs mt-0.5">
+                              {job.company} &bull; {job.location} &bull;{' '}
+                              <strong className="font-mono-metric text-accent-primary">
+                                {formatRupiah(job.rate)}/hari
+                              </strong>{' '}
+                              &bull; {job.workTime} &bull; {job.applicantsCount}{' '}
+                              Pelamar ({job.quota} Kuota)
+                            </div>
+                          </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setHrdSubTab('mfep')}
-                        className="btn-pill-secondary px-4 py-2 text-xs"
-                      >
-                        Seleksi MFEP
-                      </button>
-                      <button
-                        onClick={() => setHrdSubTab('escrow')}
-                        className="btn-pill-primary px-4 py-2 text-xs"
-                      >
-                        Pencairan H+2
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditJob(job)}
+                              className="btn-pill-secondary px-3.5 py-2 text-xs inline-flex items-center gap-1"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-accent-primary" />
+                              <span>Edit</span>
+                            </button>
 
-          {hrdSubTab === 'mfep' && (
-            <div className="harian-surface-card p-6 sm:p-8">
-              <div
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <div>
-                  <span className="text-xs font-semibold text-accent-primary">
-                    Multi-Factor Evaluation Process (MFEP)
-                  </span>
-                  <h2 className="heading-tight text-2xl">
-                    Kalkulator &amp; Pemeringkatan Kandidat Otomatis
-                  </h2>
-                  <p className="text-xs sm:text-sm">
-                    Sesuaikan bobot kriteria di bawah untuk melihat transparansi perhitungan matematika MFEP secara langsung.
-                  </p>
+                            {!isCompleted &&
+                              (isClosed ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmJobActionModal({
+                                      mode: 'reopen',
+                                      job
+                                    })
+                                  }
+                                  className="btn-pill-secondary px-3.5 py-2 text-xs inline-flex items-center gap-1 text-emerald-700"
+                                >
+                                  <Unlock className="w-3.5 h-3.5" />
+                                  <span>Buka Kembali</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmJobActionModal({
+                                      mode: 'close',
+                                      job
+                                    })
+                                  }
+                                  className="btn-pill-secondary px-3.5 py-2 text-xs inline-flex items-center gap-1 text-amber-700"
+                                >
+                                  <Lock className="w-3.5 h-3.5" />
+                                  <span>Tutup</span>
+                                </button>
+                              ))}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setConfirmJobActionModal({
+                                  mode: 'delete',
+                                  job
+                                })
+                              }
+                              className="btn-pill-secondary px-3.5 py-2 text-xs inline-flex items-center gap-1 text-red-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Hapus</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setApplicantRoleFilter(job.title);
+                                setHrdSubTab('applicants');
+                              }}
+                              className="btn-pill-primary px-3.5 py-2 text-xs"
+                            >
+                              Pelamar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-                <button
-                  onClick={handleDownloadCsv}
-                  className="btn-pill-secondary px-4 py-2.5 text-xs inline-flex items-center gap-1.5 self-start sm:self-auto"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-accent-primary" />
-                  <span>Generate Laporan CSV (&le; 10s)</span>
-                </button>
               </div>
+            )}
 
-              {/* Interactive MFEP Weight Sliders */}
-              <div
-                className="p-4 sm:p-5 rounded-2xl border mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4"
-                style={{
-                  backgroundColor: 'var(--bg-soft)',
-                  borderColor: 'var(--border)'
-                }}
-              >
-                {[
-                  { key: 'exp', label: 'Pengalaman' },
-                  { key: 'avail', label: 'Ketersediaan Shift' },
-                  { key: 'dist', label: 'Jarak Domisili' },
-                  { key: 'doc', label: 'Kelengkapan Berkas' }
-                ].map((f) => (
-                  <div key={f.key}>
-                    <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                      <span style={{ color: 'var(--text)' }}>{f.label}</span>
-                      <span className="font-mono-metric text-accent-primary">
-                        {mfepWeights[f.key]}%
-                      </span>
-                    </div>
+            {/* TAB 2: KELOLA PELAMAR (US-12: Full CRUD + Document Links & Viewer) */}
+            {hrdSubTab === 'applicants' && (
+              <div className="harian-surface-card p-6 sm:p-8">
+                <div
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-5 border-b"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <div>
+                    <span className="text-xs font-semibold text-accent-primary">
+                      Manajemen Kandidat &amp; Pemeriksaan Berkas Persyaratan
+                    </span>
+                    <h2 className="heading-tight text-2xl">Kelola Pelamar</h2>
+                    <p className="text-xs sm:text-sm">
+                      Lihat, tambah, ubah, dan hapus data pelamar beserta tautan berkas CV, KTP, dan Surat Pendukung secara konsisten.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateApplicant}
+                    className="btn-pill-primary px-5 py-2.5 text-xs sm:text-sm inline-flex items-center gap-1.5 self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Pelamar</span>
+                  </button>
+                </div>
+
+                {/* Search & Filter Bar */}
+                <search className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                  <div>
+                    <label
+                      htmlFor="searchApplicantInput"
+                      className="block text-[11px] font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Cari Nama / Kontak / Domisili
+                    </label>
                     <input
-                      type="range"
-                      min="5"
-                      max="70"
-                      step="5"
-                      value={mfepWeights[f.key]}
-                      onChange={(e) =>
-                        setMfepWeights({
-                          ...mfepWeights,
-                          [f.key]: Number(e.target.value)
-                        })
-                      }
-                      className="w-full accent-[#1D6FE8]"
+                      id="searchApplicantInput"
+                      type="search"
+                      aria-invalid="false"
+                      placeholder="Ketik nama atau nomor WA..."
+                      value={applicantSearchQuery}
+                      onChange={(e) => setApplicantSearchQuery(e.target.value)}
+                      className="frosted-input w-full px-3.5 py-2 rounded-xl text-xs focus:outline-none"
                     />
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <label
+                      htmlFor="filterApplicantRole"
+                      className="block text-[11px] font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Filter Posisi Lowongan
+                    </label>
+                    <select
+                      id="filterApplicantRole"
+                      aria-invalid="false"
+                      value={applicantRoleFilter}
+                      onChange={(e) => setApplicantRoleFilter(e.target.value)}
+                      className="frosted-input w-full px-3.5 py-2 rounded-xl text-xs focus:outline-none"
+                    >
+                      <option value="ALL">Semua Posisi Lowongan</option>
+                      {Array.from(
+                        new Set([
+                          ...jobs.map((j) => j.title),
+                          ...candidates.map((c) => c.roleTarget)
+                        ])
+                      ).map((roleTitle) => (
+                        <option key={roleTitle} value={roleTitle}>
+                          {roleTitle}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="filterApplicantStatus"
+                      className="block text-[11px] font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Filter Status Kandidat
+                    </label>
+                    <select
+                      id="filterApplicantStatus"
+                      aria-invalid="false"
+                      value={applicantStatusFilter}
+                      onChange={(e) => setApplicantStatusFilter(e.target.value)}
+                      className="frosted-input w-full px-3.5 py-2 rounded-xl text-xs focus:outline-none"
+                    >
+                      <option value="ALL">Semua Status</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Diterima">Diterima</option>
+                      <option value="Ditolak">Ditolak</option>
+                    </select>
+                  </div>
+                </search>
 
-              {/* Ranked Candidates List */}
-              <div className="space-y-3.5">
-                {rankedCandidates.map((cand, idx) => (
-                  <div
-                    key={cand.id}
-                    className="p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    style={{
-                      backgroundColor: 'var(--bg-soft)',
-                      borderColor: 'var(--border)'
-                    }}
-                  >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span
-                          className="text-xs font-mono-metric font-bold px-3 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor: 'var(--primary-light)',
-                            color: 'var(--primary)'
-                          }}
-                        >
-                          Rank #{idx + 1} &bull; Skor MFEP: {cand.mfepScore}
-                        </span>
-                        <span
-                          className="text-xs font-semibold"
-                          style={{ color: 'var(--text)' }}
-                        >
-                          Status: {cand.status}
-                        </span>
-                      </div>
-                      <h4 className="text-base font-semibold">{cand.name}</h4>
-                      <div className="text-xs font-mono-metric mt-1">
-                        Rumus: Exp({cand.weightedExp}) + Shift(
-                        {cand.weightedAvail}) + Jarak({cand.weightedDist}) +
-                        Berkas({cand.weightedDoc}) ={' '}
-                        <strong className="text-accent-primary">
-                          {cand.mfepScore}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
+                {/* Applicants CRUD List */}
+                <div className="space-y-3.5">
+                  {filteredApplicantsList.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl border border-dashed border-[#CBDDFC]">
+                      <p className="text-xs sm:text-sm font-semibold mb-3">
+                        Tidak ada data pelamar yang cocok dengan pencarian Anda.
+                      </p>
                       <button
-                        onClick={() =>
-                          handleCandidateDecision(cand.id, 'Diterima')
-                        }
-                        className="btn-pill-primary px-4 py-2 text-xs"
-                      >
-                        Terima
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleCandidateDecision(cand.id, 'Ditolak')
-                        }
+                        type="button"
+                        onClick={() => {
+                          setApplicantSearchQuery('');
+                          setApplicantRoleFilter('ALL');
+                          setApplicantStatusFilter('ALL');
+                        }}
                         className="btn-pill-secondary px-4 py-2 text-xs"
                       >
-                        Tolak
+                        Reset Pencarian
                       </button>
                     </div>
+                  ) : (
+                    filteredApplicantsList.map((cand) => (
+                      <div
+                        key={cand.id}
+                        className="p-5 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                        style={{
+                          backgroundColor: 'var(--bg-soft)',
+                          borderColor: 'var(--border)'
+                        }}
+                      >
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className="text-xs font-semibold px-3 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor:
+                                  cand.status === 'Diterima'
+                                    ? 'rgba(220, 252, 231, 0.92)'
+                                    : cand.status === 'Ditolak'
+                                    ? 'rgba(254, 226, 226, 0.92)'
+                                    : 'var(--primary-light)',
+                                color:
+                                  cand.status === 'Diterima'
+                                    ? '#15803D'
+                                    : cand.status === 'Ditolak'
+                                    ? '#B91C1C'
+                                    : 'var(--primary)'
+                              }}
+                            >
+                              {cand.status}
+                            </span>
+                            <span className="text-xs font-mono-metric font-semibold text-accent-primary">
+                              Skor MFEP: {cand.mfepScore}
+                            </span>
+                            <span className="text-[11px] text-[#526382]">
+                              {cand.appliedAt || 'Terdaftar'}
+                            </span>
+                          </div>
+
+                          <h4 className="text-base font-semibold">
+                            {cand.name}
+                          </h4>
+
+                          <div className="text-xs text-[#334463]">
+                            Posisi: <strong>{cand.roleTarget}</strong> &bull;{' '}
+                            {cand.phone} &bull; {cand.city}
+                          </div>
+
+                          {/* Clickable Requirement Document Links */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[11px] font-semibold text-[#526382]">
+                              Tautan Berkas ({(cand.documents || []).length}):
+                            </span>
+                            {Array.isArray(cand.documents) &&
+                            cand.documents.length > 0 ? (
+                              cand.documents.map((doc) => (
+                                <button
+                                  key={doc.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewDocModal({
+                                      doc,
+                                      ownerName: cand.name
+                                    })
+                                  }
+                                  className="px-2.5 py-1 rounded-lg bg-white/90 hover:bg-white border border-[#CBDDFC] text-[11px] font-semibold text-[#1D6FE8] inline-flex items-center gap-1 transition"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  <span>
+                                    {doc.docType}: {doc.fileName}
+                                  </span>
+                                </button>
+                              ))
+                            ) : (
+                              <span className="text-[11px] italic text-[#526382]">
+                                Belum ada berkas terlampir
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setApplicantDetailModal(cand)}
+                            className="btn-pill-secondary px-3 py-2 text-xs inline-flex items-center gap-1"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-accent-primary" />
+                            <span>Detail</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditApplicant(cand)}
+                            className="btn-pill-secondary px-3 py-2 text-xs inline-flex items-center gap-1"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-accent-primary" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteApplicant(cand)}
+                            className="btn-pill-secondary px-3 py-2 text-xs inline-flex items-center gap-1 text-red-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: SELEKSI KANDIDAT MFEP */}
+            {hrdSubTab === 'mfep' && (
+              <div className="harian-surface-card p-6 sm:p-8">
+                <div
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <div>
+                    <span className="text-xs font-semibold text-accent-primary">
+                      Multi-Factor Evaluation Process (MFEP)
+                    </span>
+                    <h2 className="heading-tight text-2xl">
+                      Kalkulator &amp; Pemeringkatan Kandidat Otomatis
+                    </h2>
+                    <p className="text-xs sm:text-sm">
+                      Sesuaikan bobot kriteria di bawah untuk melihat transparansi perhitungan matematika MFEP secara langsung.
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <button
+                    type="button"
+                    onClick={handleDownloadCsv}
+                    className="btn-pill-secondary px-4 py-2.5 text-xs inline-flex items-center gap-1.5 self-start sm:self-auto"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-accent-primary" />
+                    <span>Generate Laporan CSV (&le; 10s)</span>
+                  </button>
+                </div>
 
-          {hrdSubTab === 'escrow' && (
-            <div className="harian-surface-card p-6 sm:p-8">
-              <div
-                className="pb-5 mb-6 border-b"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <span className="text-xs font-semibold text-accent-primary">
-                  Integrasi Payment Gateway &amp; Rekening Bersama
-                </span>
-                <h2 className="heading-tight text-2xl">
-                  Monitoring Dana Ditahan &amp; Pencairan Gaji H+2
-                </h2>
-                <p className="text-xs sm:text-sm">
-                  Tandai pekerjaan selesai untuk mencairkan dana Escrow ke rekening pekerja maksimal H+2 (dipotong Service Tax 10%).
-                </p>
-              </div>
+                {/* Interactive MFEP Weight Sliders */}
+                <div
+                  className="p-4 sm:p-5 rounded-2xl border mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4"
+                  style={{
+                    backgroundColor: 'var(--bg-soft)',
+                    borderColor: 'var(--border)'
+                  }}
+                >
+                  {[
+                    { key: 'exp', label: 'Pengalaman' },
+                    { key: 'avail', label: 'Ketersediaan Shift' },
+                    { key: 'dist', label: 'Jarak Domisili' },
+                    { key: 'doc', label: 'Kelengkapan Berkas' }
+                  ].map((f) => (
+                    <div key={f.key}>
+                      <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                        <label
+                          htmlFor={`mfepSlider_${f.key}`}
+                          style={{ color: 'var(--text)' }}
+                        >
+                          {f.label}
+                        </label>
+                        <span className="font-mono-metric text-accent-primary">
+                          {mfepWeights[f.key]}%
+                        </span>
+                      </div>
+                      <input
+                        id={`mfepSlider_${f.key}`}
+                        type="range"
+                        min="5"
+                        max="70"
+                        step="5"
+                        aria-invalid="false"
+                        value={mfepWeights[f.key]}
+                        onChange={(e) =>
+                          setMfepWeights({
+                            ...mfepWeights,
+                            [f.key]: Number(e.target.value)
+                          })
+                        }
+                        className="w-full accent-[#1D6FE8]"
+                      />
+                    </div>
+                  ))}
+                </div>
 
-              <div className="space-y-3.5">
-                {jobs.map((job) => {
-                  const serviceFee = job.escrowHeld * 0.1;
-                  const workerNet = job.escrowHeld * 0.9;
-                  return (
+                {/* Ranked Candidates List */}
+                <div className="space-y-3.5">
+                  {rankedCandidates.map((cand, idx) => (
                     <div
-                      key={job.id}
+                      key={cand.id}
                       className="p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                       style={{
                         backgroundColor: 'var(--bg-soft)',
@@ -4746,55 +7158,304 @@ export default function App() {
                       }}
                     >
                       <div>
-                        <div className="text-xs font-mono-metric font-semibold text-accent-primary mb-1">
-                          {job.escrowStage === 'PAID_H2'
-                            ? 'STATUS: DANA TELAH DICAIRKAN KE PEKERJA (H+2)'
-                            : 'STATUS: DANA TERKUNCI DI ESCROW HARIANPAY'}
-                        </div>
-                        <h4 className="text-base font-semibold">
-                          {job.title} ({job.quota} Kuota Pekerja)
-                        </h4>
-                        <div className="text-xs font-mono-metric mt-1">
-                          Total Ditahan: {formatRupiah(job.escrowHeld)} &rarr;
-                          Bersih ke Pekerja (90%):{' '}
-                          <strong style={{ color: 'var(--text)' }}>
-                            {formatRupiah(workerNet)}
-                          </strong>{' '}
-                          | Biaya Layanan (10%): {formatRupiah(serviceFee)}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0">
-                        {job.escrowStage === 'PAID_H2' ? (
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <span
-                            className="inline-block text-xs font-semibold px-4 py-2 rounded-full"
+                            className="text-xs font-mono-metric font-bold px-3 py-0.5 rounded-full"
                             style={{
                               backgroundColor: 'var(--primary-light)',
                               color: 'var(--primary)'
                             }}
                           >
-                            Lunas Terdistribusi
+                            Rank #{idx + 1} &bull; Skor MFEP: {cand.mfepScore}
                           </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleReleaseEscrowH2(job.id)}
-                            className="btn-pill-primary px-5 py-2.5 text-xs"
+                          <span
+                            className="text-xs font-semibold"
+                            style={{ color: 'var(--text)' }}
                           >
-                            Tandai Selesai &amp; Cairkan Gaji H+2
-                          </button>
-                        )}
+                            Status: {cand.status}
+                          </span>
+                        </div>
+                        <h4 className="text-base font-semibold">{cand.name}</h4>
+                        <div className="text-xs text-[#526382]">
+                          Posisi: {cand.roleTarget} &bull; Berkas:{' '}
+                          {(cand.documents || []).length} Dokumen
+                        </div>
+                        <div className="text-xs font-mono-metric mt-1">
+                          Rumus: Exp({cand.weightedExp}) + Shift(
+                          {cand.weightedAvail}) + Jarak({cand.weightedDist}) +
+                          Berkas({cand.weightedDoc}) ={' '}
+                          <strong className="text-accent-primary">
+                            {cand.mfepScore}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCandidateDecision(cand.id, 'Diterima')
+                          }
+                          className="btn-pill-primary px-4 py-2 text-xs"
+                        >
+                          Terima
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCandidateDecision(cand.id, 'Ditolak')
+                          }
+                          className="btn-pill-secondary px-4 py-2 text-xs"
+                        >
+                          Tolak
+                        </button>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* TAB 4: PEMROSES PEMBAYARAN HARIANPAY & ESCROW H+2 (US-17) */}
+            {hrdSubTab === 'escrow' && (
+              <div className="space-y-6">
+                <div className="harian-surface-card p-6 sm:p-8">
+                  <div
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <div>
+                      <span className="text-xs font-semibold text-accent-primary">
+                        Pemroses Pembayaran Terintegrasi &amp; Rekening Bersama (US-17)
+                      </span>
+                      <h2 className="heading-tight text-2xl">
+                        HarianPay Payment Gateway &amp; Pencairan Gaji H+2
+                      </h2>
+                      <p className="text-xs sm:text-sm">
+                        Kelola pengisian saldo korporat via Virtual Account / QRIS, penguncian dana Escrow lowongan, dan distribusi upah bersih 90%.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openPaymentGatewayModal('TOPUP', 2500000)}
+                      className="btn-pill-primary px-5 py-2.5 text-xs sm:text-sm inline-flex items-center gap-1.5 self-start sm:self-auto"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>+ Top-Up / Bayar via Gateway</span>
+                    </button>
+                  </div>
+
+                  {/* Summary Metrics */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div
+                      className="p-4 rounded-2xl border"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)'
+                      }}
+                    >
+                      <div className="text-xs">Saldo Korporat Tersedia</div>
+                      <div className="text-xl font-bold font-mono-metric text-accent-primary mt-1">
+                        {formatRupiah(hrdWalletBalance)}
+                      </div>
+                      <div className="text-[11px] text-[#526382] mt-1">
+                        Siap dikunci untuk lowongan baru
+                      </div>
+                    </div>
+
+                    <div
+                      className="p-4 rounded-2xl border"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)'
+                      }}
+                    >
+                      <div className="text-xs">Total Dana Ditahan di Escrow</div>
+                      <div
+                        className="text-xl font-bold font-mono-metric mt-1"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        {formatRupiah(totalEscrowHeld)}
+                      </div>
+                      <div className="text-[11px] text-[#526382] mt-1">
+                        Dijamin 100% oleh HarianPay
+                      </div>
+                    </div>
+
+                    <div
+                      className="p-4 rounded-2xl border"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)'
+                      }}
+                    >
+                      <div className="text-xs">Total Upah Telah Dicairkan (H+2)</div>
+                      <div className="text-xl font-bold font-mono-metric text-emerald-700 mt-1">
+                        {formatRupiah(totalPaidOutH2)}
+                      </div>
+                      <div className="text-[11px] text-[#526382] mt-1">
+                        Termasuk kliring otomatis Service Fee 10%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Job Escrow Disbursement List */}
+                  <h3 className="text-sm font-bold mb-3">
+                    Status Penguncian Escrow per Lowongan
+                  </h3>
+                  <div className="space-y-3.5">
+                    {jobs.map((job) => {
+                      const serviceFee = job.escrowHeld * 0.1;
+                      const workerNet = job.escrowHeld * 0.9;
+                      const isClosedRefunded = job.status === 'CLOSED';
+                      return (
+                        <div
+                          key={job.id}
+                          className="p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          style={{
+                            backgroundColor: 'var(--bg-soft)',
+                            borderColor: 'var(--border)'
+                          }}
+                        >
+                          <div>
+                            <div className="text-xs font-mono-metric font-semibold text-accent-primary mb-1">
+                              {job.escrowStage === 'PAID_H2'
+                                ? 'STATUS: DANA TELAH DICAIRKAN KE PEKERJA (H+2)'
+                                : isClosedRefunded
+                                ? 'STATUS: LOWONGAN DITUTUP • ESCROW DIKEMBALIKAN'
+                                : 'STATUS: DANA TERKUNCI DI ESCROW HARIANPAY'}
+                            </div>
+                            <h4 className="text-base font-semibold">
+                              {job.title} ({job.quota} Kuota Pekerja)
+                            </h4>
+                            <div className="text-xs font-mono-metric mt-1">
+                              Total Ditahan: {formatRupiah(job.escrowHeld)} &rarr;
+                              Bersih ke Pekerja (90%):{' '}
+                              <strong style={{ color: 'var(--text)' }}>
+                                {formatRupiah(workerNet)}
+                              </strong>{' '}
+                              | Biaya Layanan (10%): {formatRupiah(serviceFee)}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            {job.escrowStage === 'PAID_H2' ? (
+                              <span
+                                className="inline-block text-xs font-semibold px-4 py-2 rounded-full"
+                                style={{
+                                  backgroundColor: 'var(--primary-light)',
+                                  color: 'var(--primary)'
+                                }}
+                              >
+                                Lunas Terdistribusi
+                              </span>
+                            ) : isClosedRefunded ? (
+                              <span className="inline-block text-xs font-semibold px-4 py-2 rounded-full bg-slate-200 text-slate-700">
+                                Ditutup (Refunded)
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleReleaseEscrowH2(job.id)}
+                                className="btn-pill-primary px-5 py-2.5 text-xs"
+                              >
+                                Tandai Selesai &amp; Cairkan Gaji H+2
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Payment Processor Transaction Ledger */}
+                <div className="harian-surface-card p-6 sm:p-8">
+                  <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#DCE8FD]">
+                    <div>
+                      <h3 className="heading-tight text-lg">
+                        Riwayat Mutasi &amp; Bukti Pemroses Pembayaran
+                      </h3>
+                      <p className="text-xs">
+                        Seluruh transaksi Payment Gateway (Top-Up, Penguncian Escrow, Refund, dan Pencairan H+2) tercatat otomatis.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {paymentTransactions.map((tx) => (
+                      <div
+                        key={tx.id}
+                        className="p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        style={{
+                          backgroundColor: 'var(--bg-soft)',
+                          borderColor: 'var(--border)'
+                        }}
+                      >
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="font-mono-metric font-bold text-accent-primary">
+                              {tx.invoiceId}
+                            </span>
+                            <span>&bull;</span>
+                            <span>{tx.createdAt}</span>
+                            <span
+                              className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
+                              style={{
+                                backgroundColor: 'var(--primary-light)',
+                                color: 'var(--primary)'
+                              }}
+                            >
+                              {tx.status}
+                            </span>
+                          </div>
+                          <div
+                            className="text-sm font-semibold mt-0.5"
+                            style={{ color: 'var(--text)' }}
+                          >
+                            {tx.title}
+                          </div>
+                          <div className="text-xs text-[#526382]">
+                            Metode: {tx.method}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span
+                            className="text-sm font-bold font-mono-metric"
+                            style={{
+                              color:
+                                tx.type === 'TOP_UP' ||
+                                tx.type === 'ESCROW_REFUND'
+                                  ? '#15803D'
+                                  : 'var(--text)'
+                            }}
+                          >
+                            {tx.type === 'TOP_UP' || tx.type === 'ESCROW_REFUND'
+                              ? '+'
+                              : ''}
+                            {formatRupiah(tx.amount)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setReceiptPreviewTx(tx)}
+                            className="btn-pill-secondary px-3 py-1.5 text-xs inline-flex items-center gap-1"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-accent-primary" />
+                            <span>Nota</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </section>
-  );
+      </section>
+    );
+  };
 
   // ============================================================================
   // 14. MAIN COMPONENT RETURN & MODALS
@@ -5346,8 +8007,10 @@ export default function App() {
                 Ringkasan Ekosistem Kerja Harian
               </h3>
               <button
+                type="button"
                 onClick={() => setShowHowItWorksModal(false)}
                 className="p-2 rounded-full hover:bg-[#F5F8FF]"
+                aria-label="Tutup panduan"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -5375,7 +8038,7 @@ export default function App() {
                 <strong style={{ color: 'var(--text)' }}>
                   2. Pekerja Filter &amp; Lamar Online:
                 </strong>{' '}
-                Cari lowongan sesuai lokasi, waktu shift, dan upah lalu unggah dokumen KTP.
+                Cari lowongan sesuai lokasi, waktu shift, dan upah lalu unggah dokumen KTP &amp; CV.
               </div>
               <div
                 className="p-3.5 rounded-xl border"
@@ -5403,6 +8066,7 @@ export default function App() {
               </div>
             </div>
             <button
+              type="button"
               onClick={() => setShowHowItWorksModal(false)}
               className="btn-pill-primary w-full py-3 text-sm"
             >
@@ -5412,12 +8076,1335 @@ export default function App() {
         </div>
       )}
 
+      {/* NATIVE MODAL (US-08): EDIT DETAIL LOWONGAN PEKERJAAN */}
+      <NativeModalDialog
+        open={Boolean(editingJobModal)}
+        onClose={() => setEditingJobModal(null)}
+        labelledBy={editJobDialogTitleId}
+        maxWidthClass="max-w-2xl"
+      >
+        {editingJobModal && (
+          <div>
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#DCE8FD]">
+              <div>
+                <h1 id={editJobDialogTitleId} className="heading-tight text-xl">
+                  Edit Lowongan Pekerjaan
+                </h1>
+                <p className="text-xs">
+                  Perubahan detail valid atau penutupan status langsung diperbarui ke database &amp; pencarian pelamar.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingJobModal(null)}
+                className="p-2 rounded-full hover:bg-white/80"
+                aria-label="Tutup form edit lowongan"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editJobError && (
+              <div
+                role="alert"
+                className="mb-4 p-3.5 rounded-xl border border-red-400 bg-red-50 text-red-800 text-xs font-semibold"
+              >
+                {editJobError}
+              </div>
+            )}
+
+            <form onSubmit={handleEditJobSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="editJobTitle"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Judul Posisi Pekerjaan *
+                  </label>
+                  <input
+                    id="editJobTitle"
+                    type="text"
+                    required
+                    aria-invalid="false"
+                    value={editingJobModal.title}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        title: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="editJobLocation"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Lokasi Kerja *
+                  </label>
+                  <input
+                    id="editJobLocation"
+                    type="text"
+                    required
+                    aria-invalid="false"
+                    value={editingJobModal.location}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        location: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label
+                    htmlFor="editJobRate"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Upah / Hari (Rp) *
+                  </label>
+                  <input
+                    id="editJobRate"
+                    type="number"
+                    required
+                    aria-invalid="false"
+                    value={editingJobModal.rate}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        rate: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-mono-metric focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="editJobQuota"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Kuota Pekerja *
+                  </label>
+                  <input
+                    id="editJobQuota"
+                    type="number"
+                    min="1"
+                    required
+                    aria-invalid="false"
+                    value={editingJobModal.quota}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        quota: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-mono-metric focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="editJobStatus"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Status Lowongan *
+                  </label>
+                  <select
+                    id="editJobStatus"
+                    aria-invalid="false"
+                    disabled={editingJobModal.escrowStage === 'PAID_H2'}
+                    value={editingJobModal.status || 'OPEN'}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        status: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  >
+                    <option value="OPEN">Aktif (Tampil di Pencarian)</option>
+                    <option value="CLOSED">
+                      Ditutup (Sembunyikan dari Pencarian)
+                    </option>
+                    {editingJobModal.escrowStage === 'PAID_H2' && (
+                      <option value="COMPLETED">Selesai (Gaji Cair H+2)</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label
+                    htmlFor="editJobCategory"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Kategori Pekerjaan
+                  </label>
+                  <select
+                    id="editJobCategory"
+                    aria-invalid="false"
+                    value={editingJobModal.category}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        category: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  >
+                    <option value="Logistics & Warehouse">
+                      Logistics &amp; Warehouse
+                    </option>
+                    <option value="Event Staff">Event Staff</option>
+                    <option value="Hospitality">Hospitality</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="editJobShiftType"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Tipe Shift
+                  </label>
+                  <select
+                    id="editJobShiftType"
+                    aria-invalid="false"
+                    value={editingJobModal.scheduleType}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        scheduleType: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  >
+                    <option value="Morning Shift">Morning Shift</option>
+                    <option value="Night Shift">Night Shift</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="editJobWorkTime"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Jam Kerja Shift *
+                  </label>
+                  <input
+                    id="editJobWorkTime"
+                    type="text"
+                    required
+                    aria-invalid="false"
+                    value={editingJobModal.workTime}
+                    onChange={(e) =>
+                      setEditingJobModal({
+                        ...editingJobModal,
+                        workTime: e.target.value
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="editJobDesc"
+                  className="block text-xs font-semibold mb-1"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Deskripsi Tugas &amp; Kebutuhan Tenaga Kerja *
+                </label>
+                <textarea
+                  id="editJobDesc"
+                  rows="3"
+                  required
+                  aria-invalid="false"
+                  value={editingJobModal.description}
+                  onChange={(e) =>
+                    setEditingJobModal({
+                      ...editingJobModal,
+                      description: e.target.value
+                    })
+                  }
+                  className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingJobModal(null)}
+                  className="btn-pill-secondary px-5 py-2.5 text-xs sm:text-sm"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="btn-pill-primary px-6 py-2.5 text-xs sm:text-sm"
+                >
+                  Simpan Perubahan Lowongan
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-08): KONFIRMASI TUTUP / BUKA / HAPUS LOWONGAN */}
+      <NativeModalDialog
+        open={Boolean(confirmJobActionModal)}
+        onClose={() => setConfirmJobActionModal(null)}
+        labelledBy={confirmJobDialogTitleId}
+        maxWidthClass="max-w-md"
+      >
+        {confirmJobActionModal && (
+          <div>
+            <h1 id={confirmJobDialogTitleId} className="heading-tight text-lg mb-2">
+              {confirmJobActionModal.mode === 'delete'
+                ? 'Hapus Lowongan Pekerjaan?'
+                : confirmJobActionModal.mode === 'close'
+                ? 'Tutup Lowongan Pekerjaan?'
+                : 'Buka Kembali Lowongan Pekerjaan?'}
+            </h1>
+            <p className="text-xs sm:text-sm leading-relaxed mb-5">
+              {confirmJobActionModal.mode === 'delete' ? (
+                <>
+                  Lowongan <strong>{confirmJobActionModal.job.title}</strong> akan dihapus permanen dari database dan tidak lagi muncul di pencarian aktif pelamar. Dana Escrow yang belum dicairkan otomatis dikembalikan ke Saldo HarianPay.
+                </>
+              ) : confirmJobActionModal.mode === 'close' ? (
+                <>
+                  Lowongan <strong>{confirmJobActionModal.job.title}</strong> akan diubah menjadi berstatus <strong>Ditutup</strong> dan disembunyikan dari pencarian aktif pelamar.
+                </>
+              ) : (
+                <>
+                  Lowongan <strong>{confirmJobActionModal.job.title}</strong> akan diaktifkan kembali di pencarian pelamar dengan mengunci dana Escrow sebesar{' '}
+                  <strong className="font-mono-metric">
+                    {formatRupiah(
+                      Number(confirmJobActionModal.job.rate) *
+                        Number(confirmJobActionModal.job.quota)
+                    )}
+                  </strong>
+                  .
+                </>
+              )}
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmJobActionModal(null)}
+                className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmJobStatusOrDelete}
+                className="btn-pill-primary px-5 py-2 text-xs sm:text-sm"
+                style={
+                  confirmJobActionModal.mode === 'delete'
+                    ? { background: '#DC2626' }
+                    : undefined
+                }
+              >
+                {confirmJobActionModal.mode === 'delete'
+                  ? 'Ya, Hapus Lowongan'
+                  : confirmJobActionModal.mode === 'close'
+                  ? 'Ya, Tutup Lowongan'
+                  : 'Ya, Buka Kembali'}
+              </button>
+            </div>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-12): TAMBAH / UBAH DATA PELAMAR & BERKAS PERSYARATAN */}
+      <NativeModalDialog
+        open={Boolean(applicantCrudModal)}
+        onClose={() => setApplicantCrudModal(null)}
+        labelledBy={applicantCrudDialogTitleId}
+        maxWidthClass="max-w-2xl"
+      >
+        {applicantCrudModal && (
+          <div>
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#DCE8FD]">
+              <div>
+                <h1
+                  id={applicantCrudDialogTitleId}
+                  className="heading-tight text-xl"
+                >
+                  {applicantCrudModal.mode === 'create'
+                    ? 'Tambah Data Pelamar Baru'
+                    : 'Ubah Data Pelamar & Berkas Persyaratan'}
+                </h1>
+                <p className="text-xs">
+                  Seluruh perubahan data kandidat dan berkas tersimpan konsisten di database.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApplicantCrudModal(null)}
+                className="p-2 rounded-full hover:bg-white/80"
+                aria-label="Tutup form pelamar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {applicantFormError && (
+              <div
+                role="alert"
+                className="mb-4 p-3.5 rounded-xl border border-red-400 bg-red-50 text-red-800 text-xs font-semibold"
+              >
+                {applicantFormError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveApplicantCrud} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="candNameInput"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Nama Lengkap Kandidat *
+                  </label>
+                  <input
+                    id="candNameInput"
+                    type="text"
+                    required
+                    aria-invalid="false"
+                    value={applicantCrudModal.data.name}
+                    onChange={(e) =>
+                      setApplicantCrudModal({
+                        ...applicantCrudModal,
+                        data: {
+                          ...applicantCrudModal.data,
+                          name: e.target.value
+                        }
+                      })
+                    }
+                    placeholder="Contoh: Raka Pratama"
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="candPhoneInput"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Kontak / WhatsApp *
+                  </label>
+                  <input
+                    id="candPhoneInput"
+                    type="tel"
+                    required
+                    aria-invalid="false"
+                    value={applicantCrudModal.data.phone}
+                    onChange={(e) =>
+                      setApplicantCrudModal({
+                        ...applicantCrudModal,
+                        data: {
+                          ...applicantCrudModal.data,
+                          phone: e.target.value
+                        }
+                      })
+                    }
+                    placeholder="+62 812-xxxx-xxxx"
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="candEmailInput"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Alamat Email
+                  </label>
+                  <input
+                    id="candEmailInput"
+                    type="email"
+                    aria-invalid="false"
+                    value={applicantCrudModal.data.email || ''}
+                    onChange={(e) =>
+                      setApplicantCrudModal({
+                        ...applicantCrudModal,
+                        data: {
+                          ...applicantCrudModal.data,
+                          email: e.target.value
+                        }
+                      })
+                    }
+                    placeholder="kandidat@email.com"
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="candCityInput"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Domisili *
+                  </label>
+                  <input
+                    id="candCityInput"
+                    type="text"
+                    required
+                    aria-invalid="false"
+                    value={applicantCrudModal.data.city || ''}
+                    onChange={(e) =>
+                      setApplicantCrudModal({
+                        ...applicantCrudModal,
+                        data: {
+                          ...applicantCrudModal.data,
+                          city: e.target.value
+                        }
+                      })
+                    }
+                    placeholder="Contoh: Bekasi / Jakarta"
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="candRoleSelect"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Posisi Lowongan Dilamar *
+                  </label>
+                  <select
+                    id="candRoleSelect"
+                    aria-invalid="false"
+                    value={applicantCrudModal.data.roleTarget}
+                    onChange={(e) => {
+                      const chosenTitle = e.target.value;
+                      const foundJob = jobs.find((j) => j.title === chosenTitle);
+                      setApplicantCrudModal({
+                        ...applicantCrudModal,
+                        data: {
+                          ...applicantCrudModal.data,
+                          roleTarget: chosenTitle,
+                          jobId: foundJob?.id || applicantCrudModal.data.jobId
+                        }
+                      });
+                    }}
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  >
+                    {Array.from(
+                      new Set([
+                        ...jobs.map((j) => j.title),
+                        applicantCrudModal.data.roleTarget
+                      ].filter(Boolean))
+                    ).map((titleOpt) => (
+                      <option key={titleOpt} value={titleOpt}>
+                        {titleOpt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="candStatusSelect"
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Status Seleksi Kandidat *
+                  </label>
+                  <select
+                    id="candStatusSelect"
+                    aria-invalid="false"
+                    value={applicantCrudModal.data.status}
+                    onChange={(e) =>
+                      setApplicantCrudModal({
+                        ...applicantCrudModal,
+                        data: {
+                          ...applicantCrudModal.data,
+                          status: e.target.value
+                        }
+                      })
+                    }
+                    className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Diterima">Diterima</option>
+                    <option value="Ditolak">Ditolak</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Nilai Kriteria MFEP */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { key: 'exp', label: 'Nilai Pengalaman' },
+                  { key: 'avail', label: 'Nilai Shift' },
+                  { key: 'dist', label: 'Nilai Domisili' },
+                  { key: 'doc', label: 'Nilai Berkas' }
+                ].map((metric) => (
+                  <div key={metric.key}>
+                    <label
+                      htmlFor={`candMetric_${metric.key}`}
+                      className="block text-[11px] font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      {metric.label} (0-100)
+                    </label>
+                    <input
+                      id={`candMetric_${metric.key}`}
+                      type="number"
+                      min="0"
+                      max="100"
+                      aria-invalid="false"
+                      value={applicantCrudModal.data[metric.key]}
+                      onChange={(e) =>
+                        setApplicantCrudModal({
+                          ...applicantCrudModal,
+                          data: {
+                            ...applicantCrudModal.data,
+                            [metric.key]: e.target.value
+                          }
+                        })
+                      }
+                      className="frosted-input w-full px-3 py-2 rounded-xl text-xs font-mono-metric focus:outline-none"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="candNotesInput"
+                  className="block text-xs font-semibold mb-1"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Catatan Evaluasi HRD
+                </label>
+                <textarea
+                  id="candNotesInput"
+                  rows="2"
+                  aria-invalid="false"
+                  value={applicantCrudModal.data.notes || ''}
+                  onChange={(e) =>
+                    setApplicantCrudModal({
+                      ...applicantCrudModal,
+                      data: {
+                        ...applicantCrudModal.data,
+                        notes: e.target.value
+                      }
+                    })
+                  }
+                  placeholder="Catatan tambahan mengenai kualifikasi atau kelengkapan berkas pelamar..."
+                  className="frosted-input w-full px-3.5 py-2 rounded-xl text-xs sm:text-sm focus:outline-none"
+                />
+              </div>
+
+              {/* Kelola Berkas Persyaratan Kandidat */}
+              <div
+                className="p-4 rounded-2xl border space-y-3"
+                style={{
+                  backgroundColor: 'var(--bg-soft)',
+                  borderColor: 'var(--border)'
+                }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Berkas Persyaratan Kandidat (PDF/JPG/PNG/DOCX, maks. 5 MB)
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['CV', 'KTP', 'Surat Pendukung'].map((docType) => {
+                      const inputId = `hrdCandUpload_${docType.replace(/\s+/g, '_')}`;
+                      return (
+                        <span key={docType}>
+                          <input
+                            id={inputId}
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            aria-invalid="false"
+                            onChange={(e) =>
+                              handleApplicantModalFileUpload(docType, e)
+                            }
+                            className="visually-hidden"
+                          />
+                          <label
+                            htmlFor={inputId}
+                            className="btn-pill-secondary px-2.5 py-1 text-[11px] cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <Upload className="w-3 h-3 text-accent-primary" />
+                            <span>+ {docType}</span>
+                          </label>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {(applicantCrudModal.data.documents || []).length === 0 ? (
+                  <p className="text-xs text-[#526382]">
+                    Belum ada dokumen diunggah untuk kandidat ini. Gunakan tombol di atas untuk melampirkan berkas.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {applicantCrudModal.data.documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="p-2.5 rounded-xl bg-white/85 border border-[#DCE8FD] flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-bold text-accent-primary">
+                            [{doc.docType}]
+                          </span>{' '}
+                          <span className="font-medium truncate">
+                            {doc.fileName}
+                          </span>{' '}
+                          <span className="text-[11px] font-mono-metric text-[#526382]">
+                            ({formatFileSize(doc.fileSize)})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveApplicantModalDoc(doc.id)}
+                          className="text-red-600 hover:underline text-[11px] font-semibold shrink-0"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setApplicantCrudModal(null)}
+                  className="btn-pill-secondary px-5 py-2.5 text-xs sm:text-sm"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="btn-pill-primary px-6 py-2.5 text-xs sm:text-sm"
+                >
+                  {applicantCrudModal.mode === 'create'
+                    ? 'Simpan Pelamar Baru'
+                    : 'Simpan Perubahan Pelamar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-12): DETAIL LENGKAP PELAMAR & TAUTAN BERKAS */}
+      <NativeModalDialog
+        open={Boolean(applicantDetailModal)}
+        onClose={() => setApplicantDetailModal(null)}
+        labelledBy={applicantDetailDialogTitleId}
+        maxWidthClass="max-w-lg"
+      >
+        {applicantDetailModal && (
+          <div>
+            <div className="flex items-start justify-between pb-4 mb-4 border-b border-[#DCE8FD]">
+              <div>
+                <span className="text-xs font-semibold text-accent-primary">
+                  Detail Profil &amp; Berkas Kandidat
+                </span>
+                <h1
+                  id={applicantDetailDialogTitleId}
+                  className="heading-tight text-xl"
+                >
+                  {applicantDetailModal.name}
+                </h1>
+                <p className="text-xs">
+                  Melamar: <strong>{applicantDetailModal.roleTarget}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApplicantDetailModal(null)}
+                className="p-2 rounded-full hover:bg-white/80"
+                aria-label="Tutup detail kandidat"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs sm:text-sm mb-5">
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-[#F5F8FF] border border-[#DCE8FD]">
+                <div>
+                  <div className="text-[11px] text-[#526382]">Kontak WA</div>
+                  <div className="font-semibold">{applicantDetailModal.phone}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#526382]">Email</div>
+                  <div className="font-semibold truncate">
+                    {applicantDetailModal.email}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#526382]">Domisili</div>
+                  <div className="font-semibold">{applicantDetailModal.city}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#526382]">
+                    Status &amp; Skor MFEP
+                  </div>
+                  <div className="font-semibold text-accent-primary font-mono-metric">
+                    {applicantDetailModal.status} ({applicantDetailModal.mfepScore})
+                  </div>
+                </div>
+              </div>
+
+              {applicantDetailModal.notes && (
+                <p className="text-xs leading-relaxed">
+                  <strong>Catatan Kandidat / HRD:</strong>{' '}
+                  {applicantDetailModal.notes}
+                </p>
+              )}
+
+              <div className="pt-2">
+                <div className="text-xs font-bold mb-2">
+                  Dokumen Persyaratan Terlampir:
+                </div>
+                {(applicantDetailModal.documents || []).length === 0 ? (
+                  <p className="text-xs italic">Tidak ada berkas terlampir.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {applicantDetailModal.documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="p-3 rounded-xl border border-[#CBDDFC] bg-white flex items-center justify-between gap-2"
+                      >
+                        <div className="text-xs min-w-0">
+                          <div className="font-bold text-[#091326] truncate">
+                            {doc.docType} &mdash; {doc.fileName}
+                          </div>
+                          <div className="text-[11px] font-mono-metric text-[#526382]">
+                            {formatFileSize(doc.fileSize)} &bull; {doc.uploadedAt}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewDocModal({
+                                doc,
+                                ownerName: applicantDetailModal.name
+                              })
+                            }
+                            className="btn-pill-secondary px-2.5 py-1.5 text-[11px]"
+                          >
+                            Buka
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDownloadDocumentFile(
+                                doc,
+                                applicantDetailModal.name
+                              )
+                            }
+                            className="btn-pill-primary px-2.5 py-1.5 text-[11px]"
+                          >
+                            Unduh
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const cand = applicantDetailModal;
+                  setApplicantDetailModal(null);
+                  handleOpenEditApplicant(cand);
+                }}
+                className="btn-pill-secondary px-4 py-2 text-xs"
+              >
+                Edit Pelamar
+              </button>
+              <button
+                type="button"
+                onClick={() => setApplicantDetailModal(null)}
+                className="btn-pill-primary px-5 py-2 text-xs"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-12): KONFIRMASI HAPUS PELAMAR */}
+      <NativeModalDialog
+        open={Boolean(confirmDeleteApplicant)}
+        onClose={() => setConfirmDeleteApplicant(null)}
+        labelledBy={deleteApplicantDialogTitleId}
+        maxWidthClass="max-w-md"
+      >
+        {confirmDeleteApplicant && (
+          <div>
+            <h1
+              id={deleteApplicantDialogTitleId}
+              className="heading-tight text-lg mb-2"
+            >
+              Hapus Data Pelamar?
+            </h1>
+            <p className="text-xs sm:text-sm leading-relaxed mb-5">
+              Anda yakin ingin menghapus kandidat{' '}
+              <strong>{confirmDeleteApplicant.name}</strong> ({confirmDeleteApplicant.roleTarget}) beserta tautan berkasnya dari database?
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmDeleteApplicant(null)}
+                className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteApplicantNow}
+                className="btn-pill-primary px-5 py-2 text-xs sm:text-sm"
+                style={{ background: '#DC2626' }}
+              >
+                Ya, Hapus Pelamar
+              </button>
+            </div>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-10 & US-12): PRATINJAU & UNDUH BERKAS PERSYARATAN */}
+      <NativeModalDialog
+        open={Boolean(previewDocModal)}
+        onClose={() => setPreviewDocModal(null)}
+        labelledBy={previewDocDialogTitleId}
+        maxWidthClass="max-w-2xl"
+      >
+        {previewDocModal && (() => {
+          const { doc, ownerName } = previewDocModal;
+          const liveDataUrl = resolveDocDataUrl(doc);
+          const isImage =
+            liveDataUrl &&
+            (doc.mimeType?.startsWith('image/') ||
+              /\.(jpg|jpeg|png)$/i.test(doc.fileName || ''));
+          const isPdf =
+            liveDataUrl &&
+            (doc.mimeType === 'application/pdf' ||
+              /\.pdf$/i.test(doc.fileName || ''));
+
+          return (
+            <div>
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DCE8FD]">
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-accent-primary uppercase">
+                    Pemeriksaan Berkas HRD &bull; {doc.docType}
+                  </span>
+                  <h1
+                    id={previewDocDialogTitleId}
+                    className="heading-tight text-lg truncate"
+                  >
+                    {doc.fileName}
+                  </h1>
+                  <p className="text-xs text-[#526382]">
+                    Kandidat: <strong>{ownerName}</strong> &bull; Ukuran:{' '}
+                    {formatFileSize(doc.fileSize)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDocModal(null)}
+                  className="p-2 rounded-full hover:bg-white/80 shrink-0"
+                  aria-label="Tutup pratinjau berkas"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-[#CBDDFC] bg-white p-4 mb-4 max-h-[56vh] overflow-y-auto">
+                {isImage ? (
+                  <img
+                    src={liveDataUrl}
+                    alt={`Pratinjau ${doc.fileName}`}
+                    className="max-h-[48vh] mx-auto rounded-xl object-contain"
+                  />
+                ) : isPdf ? (
+                  <iframe
+                    title={`Pratinjau PDF ${doc.fileName}`}
+                    src={liveDataUrl}
+                    className="w-full h-[48vh] rounded-xl border-0"
+                  />
+                ) : (
+                  <div className="p-5 space-y-3 text-xs leading-relaxed">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#DCE8FD] text-[#1D6FE8] font-bold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>BERKAS TERVERIFIKASI SISTEM HARIAN</span>
+                    </div>
+                    <h4 className="text-base font-bold text-[#091326]">
+                      {doc.docType} &mdash; {doc.fileName}
+                    </h4>
+                    <div className="p-3.5 rounded-xl bg-[#F5F8FF] border border-[#DCE8FD] space-y-1 font-mono-metric text-[11px]">
+                      <div>Pemilik Dokumen: {ownerName}</div>
+                      <div>Ukuran Berkas: {formatFileSize(doc.fileSize)}</div>
+                      <div>Waktu Unggah: {doc.uploadedAt || 'Terverifikasi'}</div>
+                      <div>Status: Tersimpan &amp; Terhubung ke Data Lamaran HRD</div>
+                    </div>
+                    <p className="text-[#334463]">
+                      Berkas persyaratan ini telah melewati validasi format dan batas ukuran (&le; 5 MB) serta siap diunduh oleh tim HRD untuk proses verifikasi kandidat.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDocModal(null)}
+                  className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
+                >
+                  Tutup Pratinjau
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadDocumentFile(doc, ownerName)}
+                  className="btn-pill-primary px-5 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh Berkas</span>
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-17): PEMROSES PEMBAYARAN HARIANPAY PAYMENT GATEWAY */}
+      <NativeModalDialog
+        open={Boolean(paymentModal)}
+        onClose={() => setPaymentModal(null)}
+        labelledBy={paymentDialogTitleId}
+        maxWidthClass="max-w-lg"
+      >
+        {paymentModal && (
+          <div>
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#DCE8FD]">
+              <div>
+                <span className="text-[11px] font-mono-metric font-bold text-accent-primary">
+                  HARIANPAY PAYMENT GATEWAY &bull; {paymentModal.invoiceId}
+                </span>
+                <h1 id={paymentDialogTitleId} className="heading-tight text-xl">
+                  {paymentModal.purpose === 'JOB_ESCROW'
+                    ? 'Pembayaran Penguncian Dana Escrow'
+                    : 'Top-Up Saldo Escrow Korporat'}
+                </h1>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentModal(null)}
+                className="p-2 rounded-full hover:bg-white/80"
+                aria-label="Tutup pemroses pembayaran"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {paymentModalError && (
+              <div
+                role="alert"
+                className="mb-4 p-3 rounded-xl border border-red-400 bg-red-50 text-red-800 text-xs font-semibold"
+              >
+                {paymentModalError}
+              </div>
+            )}
+
+            <form onSubmit={handleProcessGatewayPayment} className="space-y-4">
+              {paymentModal.purpose === 'TOPUP' && (
+                <div>
+                  <span className="block text-xs font-semibold mb-1.5">
+                    Pilih Nominal Cepat
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                    {[1000000, 2500000, 5000000, 10000000].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() =>
+                          setPaymentModal({ ...paymentModal, amount: preset })
+                        }
+                        className={
+                          Number(paymentModal.amount) === preset
+                            ? 'btn-pill-primary py-2 px-2 text-[11px] font-mono-metric'
+                            : 'btn-pill-secondary py-2 px-2 text-[11px] font-mono-metric'
+                        }
+                      >
+                        {formatRupiah(preset)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label
+                  htmlFor="gatewayAmountInput"
+                  className="block text-xs font-semibold mb-1"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Nominal Tagihan Pembayaran (Rp) *
+                </label>
+                <input
+                  id="gatewayAmountInput"
+                  type="number"
+                  min="50000"
+                  required
+                  aria-invalid="false"
+                  value={paymentModal.amount}
+                  onChange={(e) =>
+                    setPaymentModal({
+                      ...paymentModal,
+                      amount: e.target.value
+                    })
+                  }
+                  className="frosted-input w-full px-4 py-2.5 rounded-xl text-sm font-mono-metric font-bold focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="gatewayMethodSelect"
+                  className="block text-xs font-semibold mb-1"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Kanal Pemroses Pembayaran *
+                </label>
+                <select
+                  id="gatewayMethodSelect"
+                  aria-invalid="false"
+                  value={paymentModal.method}
+                  onChange={(e) =>
+                    setPaymentModal({
+                      ...paymentModal,
+                      method: e.target.value
+                    })
+                  }
+                  className="frosted-input w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
+                >
+                  <option value="Virtual Account BCA (Escrow HarianPay)">
+                    Virtual Account BCA (Escrow HarianPay)
+                  </option>
+                  <option value="Virtual Account Mandiri (Escrow HarianPay)">
+                    Virtual Account Mandiri (Escrow HarianPay)
+                  </option>
+                  <option value="Virtual Account BNI Korporat">
+                    Virtual Account BNI Korporat
+                  </option>
+                  <option value="QRIS Korporat Instan">
+                    QRIS Korporat Instan
+                  </option>
+                  <option value="GoPay / E-Wallet Korporat">
+                    GoPay / E-Wallet Korporat
+                  </option>
+                </select>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#F5F8FF] border border-[#BFD6FA] space-y-2 text-xs">
+                {paymentModal.method.includes('QRIS') ? (
+                  <div className="text-center py-2 space-y-2">
+                    <div className="text-[11px] font-bold text-[#0F1B33]">
+                      SCAN QRIS RESMI HARIANPAY ESCROW
+                    </div>
+                    <div className="w-28 h-28 mx-auto rounded-xl bg-white border-2 border-[#0F1B33] p-2 grid grid-cols-5 gap-1">
+                      {Array.from({ length: 25 }).map((_, i) => (
+                        <span
+                          key={i}
+                          className="rounded-[2px]"
+                          style={{
+                            backgroundColor:
+                              [0, 1, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 21, 23, 24].includes(
+                                i
+                              )
+                                ? '#0F1B33'
+                                : '#DCE8FD'
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="text-[11px] font-mono-metric text-[#526382]">
+                      NMID: ID2026088991100 &bull; {hrdProfile.companyName}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[11px] text-[#526382]">
+                        Nomor Virtual Account / Kode Bayar
+                      </div>
+                      <div className="text-sm font-mono-metric font-bold text-[#091326]">
+                        {paymentModal.vaNumber}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(
+                          paymentModal.vaNumber.replace(/\s+/g, '')
+                        );
+                        triggerToast('Nomor Virtual Account berhasil disalin.');
+                      }}
+                      className="btn-pill-secondary px-3 py-1.5 text-[11px] inline-flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3 text-accent-primary" />
+                      <span>Salin</span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-dashed border-[#BFD6FA] flex justify-between font-bold">
+                  <span>Total Dibayar (Bebas Biaya Admin Gateway)</span>
+                  <span className="font-mono-metric text-accent-primary">
+                    {formatRupiah(paymentModal.amount)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModal(null)}
+                  className="btn-pill-secondary px-4 py-2.5 text-xs sm:text-sm"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="btn-pill-primary px-6 py-2.5 text-xs sm:text-sm inline-flex items-center gap-1.5"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>
+                    Bayar {formatRupiah(paymentModal.amount)} Sekarang
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-17): NOTA BUKTI TRANSAKSI PEMROSES PEMBAYARAN */}
+      <NativeModalDialog
+        open={Boolean(receiptPreviewTx)}
+        onClose={() => setReceiptPreviewTx(null)}
+        labelledBy={receiptDialogTitleId}
+        maxWidthClass="max-w-md"
+      >
+        {receiptPreviewTx && (
+          <div>
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DCE8FD]">
+              <div>
+                <span className="text-[11px] font-mono-metric font-bold text-accent-primary">
+                  BUKTI RESMI HARIANPAY
+                </span>
+                <h1 id={receiptDialogTitleId} className="heading-tight text-lg">
+                  {receiptPreviewTx.invoiceId}
+                </h1>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReceiptPreviewTx(null)}
+                className="p-2 rounded-full hover:bg-white/80"
+                aria-label="Tutup nota transaksi"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#F5F8FF] border border-[#CBDDFC] space-y-2 text-xs mb-5">
+              <div className="flex justify-between">
+                <span className="text-[#526382]">Waktu Transaksi</span>
+                <span className="font-semibold">{receiptPreviewTx.createdAt}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#526382]">Instansi</span>
+                <span className="font-semibold">{hrdProfile.companyName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#526382]">Metode</span>
+                <span className="font-semibold text-right">
+                  {receiptPreviewTx.method}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#526382]">Keterangan</span>
+                <span className="font-semibold text-right max-w-[60%]">
+                  {receiptPreviewTx.title}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-dashed border-[#BFD6FA] flex justify-between text-sm font-bold">
+                <span>Nominal</span>
+                <span className="font-mono-metric text-accent-primary">
+                  {formatRupiah(receiptPreviewTx.amount)}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setReceiptPreviewTx(null)}
+              className="btn-pill-primary w-full py-2.5 text-xs sm:text-sm"
+            >
+              Tutup Bukti Pembayaran
+            </button>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* POLITE SCREEN-READER STATUS ANNOUNCER */}
+      <div aria-live="polite" className="visually-hidden">
+        {liveAnnouncement}
+      </div>
+
       {/* LIGHT-THEME TOAST NOTIFICATION */}
       {toastMessage && (
         <div
-          className="fixed bottom-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl border shadow-lg view-transition-enter"
+          role="status"
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl border shadow-lg view-transition-enter max-w-md"
           style={{
-            backgroundColor: 'var(--surface)',
+            backgroundColor: 'var(--surface-strong)',
             borderColor: 'var(--primary)'
           }}
         >
