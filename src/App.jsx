@@ -1683,7 +1683,6 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [profileStep, setProfileStep] = useState(1);
   const [workerProfile, setWorkerProfile] = useState(initialDb.workerProfile);
-  const [profileRoleTab, setProfileRoleTab] = useState('worker'); // 'worker' | 'hrd'
   const [workerProfileDraft, setWorkerProfileDraft] = useState(initialDb.workerProfile);
   const [hrdProfileDraft, setHrdProfileDraft] = useState(initialDb.hrdProfile);
   const [profileFormFeedback, setProfileFormFeedback] = useState(null);
@@ -2013,26 +2012,66 @@ export default function App() {
   }, [activeView, workerSubTab, hrdSubTab]);
 
   // ============================================================================
-  // 5. NAVIGATION, DERIVED DATA & SPRINT 3 ACTION HANDLERS
+  // 5. NAVIGATION, DERIVED DATA & SPRINT 3 ACTION HANDLERS (STRICT ROLE GUARD)
   // ============================================================================
-  const switchView = (nextView) => {
+  const switchView = (nextView, roleOverride) => {
+    const effectiveRole =
+      roleOverride !== undefined ? roleOverride : authenticatedRole;
+
+    if (effectiveRole === 'worker') {
+      if (nextView !== 'worker' && nextView !== 'profile') {
+        return;
+      }
+    } else if (effectiveRole === 'hrd') {
+      if (nextView !== 'hrd' && nextView !== 'profile') {
+        return;
+      }
+    } else if (
+      nextView === 'worker' ||
+      nextView === 'hrd' ||
+      nextView === 'profile'
+    ) {
+      setActiveView('login');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setActiveView(nextView);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const openProfileEditor = (preferredRole) => {
-    const targetRole =
-      preferredRole || (authenticatedRole === 'hrd' ? 'hrd' : 'worker');
+  const handleLogout = () => {
+    setAuthenticatedRole(null);
+    setJobDetailModalId(null);
+    setShowCreateJobModal(false);
+    setEditingJobModal(null);
+    setConfirmJobActionModal(null);
+    setApplicantCrudModal(null);
+    setApplicantDetailModal(null);
+    setConfirmDeleteApplicant(null);
+    setPreviewDocModal(null);
+    setPaymentModal(null);
+    setReceiptPreviewTx(null);
+    setActiveView('landing');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    triggerToast('Anda telah keluar dari sesi akun.');
+  };
+
+  const openProfileEditor = () => {
+    if (!authenticatedRole) {
+      switchView('login');
+      return;
+    }
     setWorkerProfileDraft({ ...workerProfile });
     setHrdProfileDraft({ ...hrdProfile });
-    setProfileRoleTab(targetRole);
     setProfileStep(1);
     setProfileFormFeedback(null);
     setProfileSubmittedOnce(false);
-    switchView('profile');
+    switchView('profile', authenticatedRole);
   };
 
   const scrollToLandingSection = (sectionId) => {
+    if (authenticatedRole) return;
     if (activeView !== 'landing') {
       setActiveView('landing');
       setTimeout(() => {
@@ -2046,6 +2085,7 @@ export default function App() {
   };
 
   const openRoleRegister = (role) => {
+    if (authenticatedRole) return;
     setRegisterRole(role);
     setRegisterEmail(
       role === 'hrd' ? 'rekrutmen@karyamaju.co.id' : 'budi.santoso@gmail.com'
@@ -2194,13 +2234,13 @@ export default function App() {
       triggerToast(
         `Pendaftaran berhasil! Selamat datang di Portal Pekerja, ${workerProfile.fullName}.`
       );
-      switchView('worker');
+      switchView('worker', 'worker');
     } else {
       setAuthenticatedRole('hrd');
       triggerToast(
         `Akun Instansi ${hrdProfile.companyName} aktif! Selamat datang di Portal Instansi.`
       );
-      switchView('hrd');
+      switchView('hrd', 'hrd');
     }
   };
 
@@ -2214,20 +2254,21 @@ export default function App() {
     if (loginRole === 'hrd') {
       setAuthenticatedRole('hrd');
       triggerToast('Berhasil masuk ke Portal Instansi (HRD).');
-      switchView('hrd');
+      switchView('hrd', 'hrd');
     } else {
       setAuthenticatedRole('worker');
       triggerToast(`Selamat datang kembali, ${workerProfile.fullName}!`);
-      switchView('worker');
+      switchView('worker', 'worker');
     }
   };
 
-  // US-07: Save Basic Profile for Worker OR Instansi/HRD
+  // US-07: Save Basic Profile Strictly for Authenticated Role (Worker OR Instansi/HRD)
   const handleSaveBasicProfile = (e) => {
     e.preventDefault();
+    if (!authenticatedRole) return;
     setProfileSubmittedOnce(true);
 
-    if (profileRoleTab === 'worker') {
+    if (authenticatedRole === 'worker') {
       const isMissing =
         !workerProfileDraft.fullName?.trim() ||
         !workerProfileDraft.phone?.trim() ||
@@ -3240,7 +3281,7 @@ export default function App() {
   };
 
   // ============================================================================
-  // 8. STICKY MATTE FROSTED NAVBAR (PORTAL & PROFIL MUNCUL SETELAH LOGIN)
+  // 8. STICKY MATTE FROSTED NAVBAR (TERKUNCI PER PERAN SETELAH LOGIN)
   // ============================================================================
   const renderStickyNavbar = () => (
     <header
@@ -3251,36 +3292,51 @@ export default function App() {
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         <button
           type="button"
-          onClick={() => switchView('landing')}
+          onClick={() =>
+            authenticatedRole
+              ? switchView(authenticatedRole === 'hrd' ? 'hrd' : 'worker')
+              : switchView('landing')
+          }
           className="flex items-center gap-2 focus:outline-none"
+          aria-label={
+            authenticatedRole === 'hrd'
+              ? 'Beranda Portal Instansi'
+              : authenticatedRole === 'worker'
+              ? 'Beranda Portal Pekerja'
+              : 'Beranda Harian'
+          }
         >
           <HarianLogo size="sm" />
         </button>
 
         <nav className="hidden md:flex items-center gap-6 text-xs sm:text-sm">
-          <button
-            type="button"
-            onClick={() => switchView('landing')}
-            className={`nav-link-animated ${
-              activeView === 'landing' ? 'active' : ''
-            }`}
-          >
-            Get Started
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToLandingSection('caraAksesSection')}
-            className="nav-link-animated"
-          >
-            Cara Akses
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToLandingSection('kenapaHarianSection')}
-            className="nav-link-animated"
-          >
-            Kenapa Harian?
-          </button>
+          {!authenticatedRole && (
+            <>
+              <button
+                type="button"
+                onClick={() => switchView('landing')}
+                className={`nav-link-animated ${
+                  activeView === 'landing' ? 'active' : ''
+                }`}
+              >
+                Get Started
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToLandingSection('caraAksesSection')}
+                className="nav-link-animated"
+              >
+                Cara Akses
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToLandingSection('kenapaHarianSection')}
+                className="nav-link-animated"
+              >
+                Kenapa Harian?
+              </button>
+            </>
+          )}
 
           {authenticatedRole === 'worker' && (
             <>
@@ -3295,7 +3351,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => openProfileEditor('worker')}
+                onClick={() => openProfileEditor()}
                 className={`nav-link-animated font-semibold ${
                   activeView === 'profile' ? 'active' : ''
                 }`}
@@ -3318,7 +3374,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => openProfileEditor('hrd')}
+                onClick={() => openProfileEditor()}
                 className={`nav-link-animated font-semibold ${
                   activeView === 'profile' ? 'active' : ''
                 }`}
@@ -3334,11 +3390,15 @@ export default function App() {
             <>
               <button
                 type="button"
-                onClick={() => openProfileEditor(authenticatedRole)}
+                onClick={() => openProfileEditor()}
                 className="btn-pill-secondary px-3.5 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5"
               >
                 <User className="w-3.5 h-3.5 text-accent-primary" />
-                <span className="hidden sm:inline">Edit Profil</span>
+                <span className="hidden sm:inline">
+                  {authenticatedRole === 'hrd'
+                    ? 'Profil Instansi'
+                    : 'Profil Saya'}
+                </span>
               </button>
               <button
                 type="button"
@@ -3353,11 +3413,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setAuthenticatedRole(null);
-                  switchView('landing');
-                  triggerToast('Anda telah keluar dari sesi akun.');
-                }}
+                onClick={handleLogout}
                 className="btn-pill-primary px-4 py-2 text-xs sm:text-sm"
               >
                 Keluar
@@ -4484,10 +4540,11 @@ export default function App() {
                 onClick={() => {
                   setFilterLocation(workerFavLocation);
                   setFilterCategory(workerFavCategory);
+                  setAuthenticatedRole('worker');
                   triggerToast(
                     'Onboarding selesai! Menampilkan lowongan sesuai lokasi & jenis kerja favoritmu.'
                   );
-                  switchView('worker');
+                  switchView('worker', 'worker');
                 }}
                 className="btn-pill-primary px-7 py-3 text-sm"
               >
@@ -4735,10 +4792,11 @@ export default function App() {
               </button>
               <button
                 onClick={() => {
+                  setAuthenticatedRole('hrd');
                   triggerToast(
                     'Onboarding Instansi selesai! Selamat datang di Dasbor HRD.'
                   );
-                  switchView('hrd');
+                  switchView('hrd', 'hrd');
                 }}
                 className="btn-pill-primary px-7 py-3 text-sm"
               >
@@ -4941,10 +4999,11 @@ export default function App() {
   );
 
   // ============================================================================
-  // 11. RENDER VIEW 3: MEMPERBARUI PROFIL DASAR PEKERJA & INSTANSI (US-07 & US-11)
+  // 11. RENDER VIEW 3: MEMPERBARUI PROFIL DASAR SESUAI PERAN LOGIN (US-07 & US-11)
   // ============================================================================
   const renderProfileView = () => {
-    const isWorkerTab = profileRoleTab === 'worker';
+    if (!authenticatedRole) return null;
+    const isWorkerTab = authenticatedRole === 'worker';
     const wEmptyName = profileSubmittedOnce && !workerProfileDraft.fullName?.trim();
     const wEmptyPhone = profileSubmittedOnce && !workerProfileDraft.phone?.trim();
     const wEmptyCity = profileSubmittedOnce && !workerProfileDraft.city?.trim();
@@ -4961,16 +5020,25 @@ export default function App() {
         style={{ backgroundColor: 'var(--bg-soft)' }}
       >
         <div className="max-w-3xl mx-auto harian-surface-card p-7 sm:p-10">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-5 mb-6 border-b border-[#DCE8FD]">
             <div>
               <span
-                className="inline-block text-xs font-semibold px-3 py-1 rounded-full mb-2"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full mb-2"
                 style={{
                   backgroundColor: 'var(--primary-light)',
                   color: 'var(--primary)'
                 }}
               >
-                Formulir Profil Digital &bull; Tersimpan Akurat
+                {isWorkerTab ? (
+                  <User className="w-3.5 h-3.5" />
+                ) : (
+                  <Building2 className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isWorkerTab
+                    ? 'Profil Akun Pekerja Harian'
+                    : 'Profil Akun Instansi / HRD'}
+                </span>
               </span>
               <h2 id="profileFormHeading" className="heading-tight text-2xl">
                 Perbarui Profil Dasar {isWorkerTab ? 'Pekerja Harian' : 'Instansi / HRD'}
@@ -4982,51 +5050,13 @@ export default function App() {
             <button
               type="button"
               onClick={() =>
-                switchView(
-                  authenticatedRole === 'hrd' || !isWorkerTab ? 'hrd' : 'worker'
-                )
+                switchView(authenticatedRole === 'hrd' ? 'hrd' : 'worker')
               }
               className="btn-pill-secondary px-4 py-2 text-xs font-semibold"
             >
-              {authenticatedRole === 'hrd' || !isWorkerTab
+              {authenticatedRole === 'hrd'
                 ? 'Ke Dasbor Instansi \u2192'
                 : 'Ke Portal Pekerja \u2192'}
-            </button>
-          </div>
-
-          {/* Role Switcher Tabs (Supports Worker & Instansi in US-07) */}
-          <div className="flex flex-wrap items-center gap-2 pb-5 mb-6 border-b border-[#DCE8FD]">
-            <button
-              type="button"
-              onClick={() => {
-                setProfileRoleTab('worker');
-                setProfileFormFeedback(null);
-                setProfileSubmittedOnce(false);
-              }}
-              className={
-                isWorkerTab
-                  ? 'btn-pill-primary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
-                  : 'btn-pill-secondary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
-              }
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Profil Pekerja Harian</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setProfileRoleTab('hrd');
-                setProfileFormFeedback(null);
-                setProfileSubmittedOnce(false);
-              }}
-              className={
-                !isWorkerTab
-                  ? 'btn-pill-primary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
-                  : 'btn-pill-secondary px-4 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5'
-              }
-            >
-              <Building2 className="w-3.5 h-3.5" />
-              <span>Profil Instansi / Perusahaan</span>
             </button>
           </div>
 
@@ -5804,7 +5834,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => openProfileEditor('worker')}
+                onClick={() => openProfileEditor()}
                 className="btn-pill-secondary px-4 py-2.5 text-xs sm:text-sm inline-flex items-center gap-1.5"
               >
                 <Pencil className="w-3.5 h-3.5 text-accent-primary" />
@@ -6619,7 +6649,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => openProfileEditor('hrd')}
+                onClick={() => openProfileEditor()}
                 className="btn-pill-secondary w-full py-2.5 text-xs inline-flex items-center justify-center gap-1.5"
               >
                 <Pencil className="w-3.5 h-3.5 text-accent-primary" />
@@ -7480,14 +7510,22 @@ export default function App() {
       {renderStickyNavbar()}
 
       <div className="relative z-10">
-        {activeView === 'landing' && renderLandingView()}
-        {activeView === 'register' && renderRegisterView()}
-        {activeView === 'onboarding-worker' && renderWorkerOnboardingView()}
-        {activeView === 'onboarding-hrd' && renderHrdOnboardingView()}
-        {activeView === 'login' && renderLoginView()}
-        {activeView === 'profile' && renderProfileView()}
-        {activeView === 'worker' && renderWorkerPortalView()}
-        {activeView === 'hrd' && renderHrdPortalView()}
+        {!authenticatedRole && activeView === 'landing' && renderLandingView()}
+        {!authenticatedRole && activeView === 'register' && renderRegisterView()}
+        {!authenticatedRole &&
+          activeView === 'onboarding-worker' &&
+          renderWorkerOnboardingView()}
+        {!authenticatedRole &&
+          activeView === 'onboarding-hrd' &&
+          renderHrdOnboardingView()}
+        {!authenticatedRole && activeView === 'login' && renderLoginView()}
+        {authenticatedRole && activeView === 'profile' && renderProfileView()}
+        {authenticatedRole === 'worker' &&
+          activeView === 'worker' &&
+          renderWorkerPortalView()}
+        {authenticatedRole === 'hrd' &&
+          activeView === 'hrd' &&
+          renderHrdPortalView()}
       </div>
 
       {/* MODAL: FOOTER INFO (TENTANG, KONTAK, KEBIJAKAN PRIVASI) */}
@@ -9151,6 +9189,7 @@ export default function App() {
                 {paymentModalError}
               </div>
             )}
+
 
             <form onSubmit={handleProcessGatewayPayment} className="space-y-4">
               {paymentModal.purpose === 'TOPUP' && (
