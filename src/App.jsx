@@ -1733,6 +1733,7 @@ export default function App() {
   const [previewDocModal, setPreviewDocModal] = useState(null);
 
   // US-17: Payment Processor (HarianPay Gateway) States
+  const [expandedEscrowJobId, setExpandedEscrowJobId] = useState(null);
   const [paymentModal, setPaymentModal] = useState(null);
   const [paymentModalError, setPaymentModalError] = useState('');
   const [receiptPreviewTx, setReceiptPreviewTx] = useState(null);
@@ -2052,6 +2053,7 @@ export default function App() {
     setPreviewDocModal(null);
     setPaymentModal(null);
     setReceiptPreviewTx(null);
+    setExpandedEscrowJobId(null);
     setActiveView('landing');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     triggerToast('Anda telah keluar dari sesi akun.');
@@ -2628,31 +2630,89 @@ export default function App() {
     );
   };
 
-  const handleReleaseEscrowH2 = (jobId) => {
-    const targetJob = jobs.find((j) => j.id === jobId);
-    setJobs((prev) =>
-      prev.map((j) =>
-        j.id === jobId
-          ? { ...j, escrowStage: 'PAID_H2', status: 'COMPLETED' }
-          : j
+  const handleReleaseWorkerEscrowH2 = (candId, explicitJob = null) => {
+    const targetCand = candidates.find((c) => c.id === candId);
+    if (!targetCand) return;
+    if (targetCand.status === 'Gaji Cair H+2') {
+      triggerToast(`Gaji untuk ${targetCand.name} sudah dicairkan sebelumnya.`);
+      return;
+    }
+    if (targetCand.status !== 'Diterima') {
+      triggerToast(
+        'Hanya pekerja berstatus "Diterima" yang dapat ditandai selesai & dicairkan gajinya.'
+      );
+      return;
+    }
+
+    const targetJob =
+      explicitJob ||
+      jobs.find(
+        (j) => j.id === targetCand.jobId || j.title === targetCand.roleTarget
+      );
+    const grossAmount = Number(targetJob?.rate || 150000);
+    const netToWorker = Math.round(grossAmount * 0.9);
+    const releasedAt = nowTimeLabel();
+
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.id === candId
+          ? {
+              ...c,
+              status: 'Gaji Cair H+2',
+              payoutReleasedAt: releasedAt,
+              payoutNetAmount: netToWorker
+            }
+          : c
       )
     );
+
     setApplications((prev) =>
-      prev.map((a) =>
-        a.jobId === jobId ? { ...a, status: 'Gaji Cair H+2' } : a
-      )
+      prev.map((a) => {
+        if (targetCand.applicationId && a.id === targetCand.applicationId) {
+          return { ...a, status: 'Gaji Cair H+2' };
+        }
+        if (
+          targetCand.name === workerProfile.fullName &&
+          ((targetJob && a.jobId === targetJob.id) ||
+            a.jobTitle === targetCand.roleTarget)
+        ) {
+          return { ...a, status: 'Gaji Cair H+2' };
+        }
+        return a;
+      })
     );
+
     if (targetJob) {
+      setJobs((prev) =>
+        prev.map((j) => {
+          if (j.id !== targetJob.id) return j;
+          const prevDisbursed =
+            typeof j.escrowDisbursed === 'number' ? j.escrowDisbursed : 0;
+          const nextHeld = Math.max(0, Number(j.escrowHeld || 0) - grossAmount);
+          const nextDisbursed = prevDisbursed + grossAmount;
+          return {
+            ...j,
+            escrowHeld: nextHeld,
+            escrowDisbursed: nextDisbursed,
+            escrowStage: nextHeld === 0 ? 'PAID_H2' : j.escrowStage,
+            status: nextHeld === 0 ? 'COMPLETED' : j.status
+          };
+        })
+      );
+
       recordTransaction(
         'PAYOUT_H2',
-        `Pencairan Gaji H+2: ${targetJob.title} (${targetJob.quota} Kuota)`,
+        `Pencairan Gaji H+2 (${targetCand.name}) — ${targetJob.title}`,
         'Auto-Disbursement Escrow HarianPay',
-        targetJob.escrowHeld,
+        grossAmount,
         'Telah Dicairkan'
       );
     }
+
     triggerToast(
-      'Pekerjaan ditandai selesai! Dana Escrow otomatis dicairkan ke rekening pekerja (H+2).'
+      `Pekerjaan ${targetCand.name} ditandai selesai! Upah bersih ${formatRupiah(
+        netToWorker
+      )} (90%) diproses cair H+2.`
     );
   };
 
@@ -6534,9 +6594,12 @@ export default function App() {
     const totalEscrowHeld = jobs
       .filter((j) => j.escrowStage === 'HELD')
       .reduce((acc, j) => acc + Number(j.escrowHeld || 0), 0);
-    const totalPaidOutH2 = jobs
-      .filter((j) => j.escrowStage === 'PAID_H2')
-      .reduce((acc, j) => acc + Number(j.escrowHeld || 0), 0);
+    const totalPaidOutH2 = jobs.reduce((acc, j) => {
+      if (typeof j.escrowDisbursed === 'number') {
+        return acc + j.escrowDisbursed;
+      }
+      return acc + (j.escrowStage === 'PAID_H2' ? Number(j.escrowHeld || 0) : 0);
+    }, 0);
 
     return (
       <section
@@ -6964,6 +7027,7 @@ export default function App() {
                       <option value="ALL">Semua Status</option>
                       <option value="Pending">Pending</option>
                       <option value="Diterima">Diterima</option>
+                      <option value="Gaji Cair H+2">Selesai (Gaji Cair H+2)</option>
                       <option value="Ditolak">Ditolak</option>
                     </select>
                   </div>
@@ -7004,20 +7068,24 @@ export default function App() {
                               className="text-xs font-semibold px-3 py-0.5 rounded-full"
                               style={{
                                 backgroundColor:
-                                  cand.status === 'Diterima'
+                                  cand.status === 'Diterima' ||
+                                  cand.status === 'Gaji Cair H+2'
                                     ? 'rgba(220, 252, 231, 0.92)'
                                     : cand.status === 'Ditolak'
                                     ? 'rgba(254, 226, 226, 0.92)'
                                     : 'var(--primary-light)',
                                 color:
-                                  cand.status === 'Diterima'
+                                  cand.status === 'Diterima' ||
+                                  cand.status === 'Gaji Cair H+2'
                                     ? '#15803D'
                                     : cand.status === 'Ditolak'
                                     ? '#B91C1C'
                                     : 'var(--primary)'
                               }}
                             >
-                              {cand.status}
+                              {cand.status === 'Gaji Cair H+2'
+                                ? 'Selesai • Gaji Cair H+2'
+                                : cand.status}
                             </span>
                             <span className="text-xs font-mono-metric font-semibold text-accent-primary">
                               Skor MFEP: {cand.mfepScore}
@@ -7070,6 +7138,16 @@ export default function App() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          {cand.status === 'Diterima' && (
+                            <button
+                              type="button"
+                              onClick={() => handleReleaseWorkerEscrowH2(cand.id)}
+                              className="btn-pill-primary px-3.5 py-2 text-xs inline-flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Tandai Selesai</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setApplicantDetailModal(cand)}
@@ -7329,70 +7407,281 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Job Escrow Disbursement List */}
-                  <h3 className="text-sm font-bold mb-3">
-                    Status Penguncian Escrow per Lowongan
-                  </h3>
+                  {/* Job Escrow Disbursement List (Buka per Lowongan -> Tandai Selesai per Pekerja) */}
+                  <div className="mb-3">
+                    <h3 className="text-sm font-bold">
+                      Status Penguncian Escrow &amp; Konfirmasi Selesai per Pekerja
+                    </h3>
+                    <p className="text-xs text-[#526382]">
+                      Buka daftar pekerja pada masing-masing lowongan untuk menandai pekerjaan selesai dan mencairkan gaji H+2 secara individual per pekerja.
+                    </p>
+                  </div>
                   <div className="space-y-3.5">
                     {jobs.map((job) => {
-                      const serviceFee = job.escrowHeld * 0.1;
-                      const workerNet = job.escrowHeld * 0.9;
                       const isClosedRefunded = job.status === 'CLOSED';
+                      const isExpanded = expandedEscrowJobId === job.id;
+                      const jobCandidates = candidates.filter(
+                        (c) => c.jobId === job.id || c.roleTarget === job.title
+                      );
+                      const acceptedWorkers = jobCandidates.filter(
+                        (c) =>
+                          c.status === 'Diterima' || c.status === 'Gaji Cair H+2'
+                      );
+                      const completedWorkers = acceptedWorkers.filter(
+                        (c) => c.status === 'Gaji Cair H+2'
+                      );
+                      const pendingWorkersCount = jobCandidates.filter(
+                        (c) => c.status === 'Pending'
+                      ).length;
+                      const disbursedForJob =
+                        typeof job.escrowDisbursed === 'number'
+                          ? job.escrowDisbursed
+                          : job.escrowStage === 'PAID_H2'
+                          ? Number(job.escrowHeld || 0)
+                          : 0;
+                      const remainingHeld =
+                        job.escrowStage === 'PAID_H2'
+                          ? 0
+                          : Number(job.escrowHeld || 0);
+                      const perWorkerNet = Math.round(Number(job.rate || 0) * 0.9);
+                      const perWorkerFee =
+                        Number(job.rate || 0) - perWorkerNet;
+
                       return (
                         <div
                           key={job.id}
-                          className="p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          className="rounded-2xl border overflow-hidden transition"
                           style={{
                             backgroundColor: 'var(--bg-soft)',
-                            borderColor: 'var(--border)'
+                            borderColor: isExpanded
+                              ? 'var(--primary)'
+                              : 'var(--border)'
                           }}
                         >
-                          <div>
-                            <div className="text-xs font-mono-metric font-semibold text-accent-primary mb-1">
-                              {job.escrowStage === 'PAID_H2'
-                                ? 'STATUS: DANA TELAH DICAIRKAN KE PEKERJA (H+2)'
-                                : isClosedRefunded
-                                ? 'STATUS: LOWONGAN DITUTUP • ESCROW DIKEMBALIKAN'
-                                : 'STATUS: DANA TERKUNCI DI ESCROW HARIANPAY'}
+                          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2 text-xs font-mono-metric font-semibold text-accent-primary mb-1">
+                                <span>
+                                  {job.escrowStage === 'PAID_H2'
+                                    ? 'STATUS: SELURUH DANA TELAH DICAIRKAN (H+2)'
+                                    : isClosedRefunded
+                                    ? 'STATUS: LOWONGAN DITUTUP • ESCROW DIKEMBALIKAN'
+                                    : 'STATUS: DANA TERKUNCI DI ESCROW HARIANPAY'}
+                                </span>
+                                {!isClosedRefunded && (
+                                  <span
+                                    className="px-2.5 py-0.5 rounded-full text-[11px] font-sans"
+                                    style={{
+                                      backgroundColor: 'var(--primary-light)',
+                                      color: 'var(--primary)'
+                                    }}
+                                  >
+                                    {completedWorkers.length} /{' '}
+                                    {acceptedWorkers.length} Pekerja Selesai
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="text-base font-semibold">
+                                {job.title} ({job.quota} Kuota &bull;{' '}
+                                {formatRupiah(job.rate)}/pekerja)
+                              </h4>
+                              <div className="text-xs font-mono-metric mt-1">
+                                Sisa Ditahan: {formatRupiah(remainingHeld)} |
+                                Sudah Dicairkan:{' '}
+                                <strong className="text-emerald-700">
+                                  {formatRupiah(disbursedForJob)}
+                                </strong>{' '}
+                                | Bersih/Pekerja (90%):{' '}
+                                <strong style={{ color: 'var(--text)' }}>
+                                  {formatRupiah(perWorkerNet)}
+                                </strong>
+                              </div>
                             </div>
-                            <h4 className="text-base font-semibold">
-                              {job.title} ({job.quota} Kuota Pekerja)
-                            </h4>
-                            <div className="text-xs font-mono-metric mt-1">
-                              Total Ditahan: {formatRupiah(job.escrowHeld)} &rarr;
-                              Bersih ke Pekerja (90%):{' '}
-                              <strong style={{ color: 'var(--text)' }}>
-                                {formatRupiah(workerNet)}
-                              </strong>{' '}
-                              | Biaya Layanan (10%): {formatRupiah(serviceFee)}
+
+                            <div className="shrink-0">
+                              {isClosedRefunded ? (
+                                <span className="inline-block text-xs font-semibold px-4 py-2 rounded-full bg-slate-200 text-slate-700">
+                                  Ditutup (Refunded)
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  aria-expanded={isExpanded}
+                                  onClick={() =>
+                                    setExpandedEscrowJobId(
+                                      isExpanded ? null : job.id
+                                    )
+                                  }
+                                  className={
+                                    isExpanded
+                                      ? 'btn-pill-secondary px-4 py-2.5 text-xs inline-flex items-center gap-1.5'
+                                      : 'btn-pill-primary px-4 py-2.5 text-xs inline-flex items-center gap-1.5'
+                                  }
+                                >
+                                  <span>
+                                    {isExpanded
+                                      ? 'Tutup Daftar Pekerja'
+                                      : `Buka Daftar Pekerja (${acceptedWorkers.length})`}
+                                  </span>
+                                  <ChevronDown
+                                    className={`w-4 h-4 transition-transform ${
+                                      isExpanded ? 'rotate-180' : ''
+                                    }`}
+                                  />
+                                </button>
+                              )}
                             </div>
                           </div>
 
-                          <div className="shrink-0">
-                            {job.escrowStage === 'PAID_H2' ? (
-                              <span
-                                className="inline-block text-xs font-semibold px-4 py-2 rounded-full"
-                                style={{
-                                  backgroundColor: 'var(--primary-light)',
-                                  color: 'var(--primary)'
-                                }}
-                              >
-                                Lunas Terdistribusi
-                              </span>
-                            ) : isClosedRefunded ? (
-                              <span className="inline-block text-xs font-semibold px-4 py-2 rounded-full bg-slate-200 text-slate-700">
-                                Ditutup (Refunded)
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleReleaseEscrowH2(job.id)}
-                                className="btn-pill-primary px-5 py-2.5 text-xs"
-                              >
-                                Tandai Selesai &amp; Cairkan Gaji H+2
-                              </button>
-                            )}
-                          </div>
+                          {/* Expandable Per-Worker Completion & Payout Panel */}
+                          {isExpanded && !isClosedRefunded && (
+                            <div
+                              className="px-5 pb-5 pt-3 border-t space-y-3"
+                              style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.72)',
+                                borderColor: 'var(--border)'
+                              }}
+                            >
+                              {acceptedWorkers.length === 0 ? (
+                                <div className="p-4 rounded-xl border border-dashed border-[#CBDDFC] bg-white/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div className="text-xs text-[#334463]">
+                                    {job.escrowStage === 'PAID_H2' ? (
+                                      <span>
+                                        Seluruh kuota pekerja ({job.quota}{' '}
+                                        pekerja) pada lowongan ini sudah lunas
+                                        terdistribusi.
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        Belum ada pekerja berstatus{' '}
+                                        <strong>Diterima</strong> pada lowongan
+                                        ini
+                                        {pendingWorkersCount > 0
+                                          ? ` (${pendingWorkersCount} pelamar masih Pending).`
+                                          : '.'}{' '}
+                                        Terima pelamar terlebih dahulu agar bisa
+                                        ditandai selesai per pekerja.
+                                      </span>
+                                    )}
+                                  </div>
+                                  {job.escrowStage !== 'PAID_H2' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setApplicantRoleFilter(job.title);
+                                        setHrdSubTab('applicants');
+                                      }}
+                                      className="btn-pill-secondary px-3.5 py-2 text-xs shrink-0"
+                                    >
+                                      Buka Kelola Pelamar &rarr;
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="space-y-2.5">
+                                  {acceptedWorkers.map((worker) => {
+                                    const isWorkerDone =
+                                      worker.status === 'Gaji Cair H+2';
+                                    return (
+                                      <div
+                                        key={worker.id}
+                                        className="p-3.5 sm:p-4 rounded-xl border bg-white/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                                        style={{
+                                          borderColor: isWorkerDone
+                                            ? '#86EFAC'
+                                            : '#CBDDFC'
+                                        }}
+                                      >
+                                        <div>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span
+                                              className="text-sm font-semibold"
+                                              style={{ color: 'var(--text)' }}
+                                            >
+                                              {worker.name}
+                                            </span>
+                                            <span
+                                              className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                                              style={{
+                                                backgroundColor: isWorkerDone
+                                                  ? 'rgba(220, 252, 231, 0.95)'
+                                                  : 'var(--primary-light)',
+                                                color: isWorkerDone
+                                                  ? '#15803D'
+                                                  : 'var(--primary)'
+                                              }}
+                                            >
+                                              {isWorkerDone
+                                                ? 'Selesai • Gaji Cair H+2'
+                                                : 'Diterima • Sedang Bekerja'}
+                                            </span>
+                                          </div>
+                                          <div className="text-[11px] text-[#526382] mt-0.5">
+                                            {worker.phone} &bull; {worker.city}
+                                            {worker.payoutReleasedAt
+                                              ? ` • Selesai pada ${worker.payoutReleasedAt}`
+                                              : ''}
+                                          </div>
+                                          <div className="text-[11px] font-mono-metric mt-1 text-[#334463]">
+                                            Upah: {formatRupiah(job.rate)}{' '}
+                                            &rarr; Bersih Pekerja (90%):{' '}
+                                            <strong className="text-accent-primary">
+                                              {formatRupiah(perWorkerNet)}
+                                            </strong>{' '}
+                                            | Fee 10%: {formatRupiah(perWorkerFee)}
+                                          </div>
+                                        </div>
+
+                                        <div className="shrink-0">
+                                          {isWorkerDone ? (
+                                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-3.5 py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                              <CheckCircle2 className="w-3.5 h-3.5" />
+                                              <span>Gaji Cair H+2</span>
+                                            </span>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleReleaseWorkerEscrowH2(
+                                                  worker.id,
+                                                  job
+                                                )
+                                              }
+                                              className="btn-pill-primary px-4 py-2 text-xs inline-flex items-center gap-1.5"
+                                            >
+                                              <CheckCircle2 className="w-3.5 h-3.5" />
+                                              <span>
+                                                Tandai Selesai &amp; Cairkan H+2
+                                              </span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+
+                                  {pendingWorkersCount > 0 && (
+                                    <div className="pt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#526382]">
+                                      <span>
+                                        Masih ada {pendingWorkersCount} pelamar
+                                        berstatus Pending untuk lowongan ini.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setApplicantRoleFilter(job.title);
+                                          setHrdSubTab('applicants');
+                                        }}
+                                        className="font-semibold text-accent-primary hover:underline"
+                                      >
+                                        Kelola Pelamar Pending &rarr;
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -8691,6 +8980,7 @@ export default function App() {
                   >
                     <option value="Pending">Pending</option>
                     <option value="Diterima">Diterima</option>
+                    <option value="Gaji Cair H+2">Selesai (Gaji Cair H+2)</option>
                     <option value="Ditolak">Ditolak</option>
                   </select>
                 </div>
@@ -8982,7 +9272,23 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              {applicantDetailModal.status === 'Diterima' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const candId = applicantDetailModal.id;
+                    handleReleaseWorkerEscrowH2(candId);
+                    setApplicantDetailModal((prev) =>
+                      prev ? { ...prev, status: 'Gaji Cair H+2' } : null
+                    );
+                  }}
+                  className="btn-pill-primary px-4 py-2 text-xs inline-flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Tandai Selesai &amp; Cairkan H+2</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -8997,7 +9303,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setApplicantDetailModal(null)}
-                className="btn-pill-primary px-5 py-2 text-xs"
+                className="btn-pill-secondary px-5 py-2 text-xs"
               >
                 Tutup
               </button>
@@ -9462,3 +9768,5 @@ export default function App() {
     </div>
   );
 }
+
+
