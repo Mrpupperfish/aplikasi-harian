@@ -966,7 +966,7 @@ const HarianLogo = ({ size = 'md' }) => {
 // ============================================================================
 // 3. SPRINT 3 PERSISTENCE LAYER, FILE HELPERS, NATIVE DIALOG & INITIAL DATA
 // ============================================================================
-const HARIAN_DB_STORAGE_KEY = 'harian_sprint3_db_v1';
+const HARIAN_DB_STORAGE_KEY = 'harian_sprint3_db_v2';
 const RUNTIME_LARGE_FILE_CACHE = new Map();
 const ALLOWED_DOC_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
 const MAX_DOC_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -1180,7 +1180,8 @@ const INITIAL_JOBS = [
     quota: 15,
     applicantsCount: 12,
     integrityScore: '4.9 / 5.0 (Verified Partner)',
-    escrowHeld: 2625000,
+    escrowHeld: 2450000,
+    escrowDisbursed: 175000,
     escrowStage: 'HELD',
     status: 'OPEN',
     matchScore: 98,
@@ -1203,6 +1204,7 @@ const INITIAL_JOBS = [
     applicantsCount: 24,
     integrityScore: '4.8 / 5.0 (Top Employer)',
     escrowHeld: 2500000,
+    escrowDisbursed: 0,
     escrowStage: 'HELD',
     status: 'OPEN',
     matchScore: 92,
@@ -1225,6 +1227,7 @@ const INITIAL_JOBS = [
     applicantsCount: 9,
     integrityScore: '4.9 / 5.0 (Verified Partner)',
     escrowHeld: 3700000,
+    escrowDisbursed: 0,
     escrowStage: 'HELD',
     status: 'OPEN',
     matchScore: 95,
@@ -1246,7 +1249,8 @@ const INITIAL_JOBS = [
     quota: 8,
     applicantsCount: 8,
     integrityScore: '4.7 / 5.0 (Verified)',
-    escrowHeld: 1200000,
+    escrowHeld: 0,
+    escrowDisbursed: 1200000,
     escrowStage: 'PAID_H2',
     status: 'COMPLETED',
     matchScore: 89,
@@ -1255,6 +1259,75 @@ const INITIAL_JOBS = [
     dresscode: 'Kaos polos rapi, apron disediakan di lokasi, sepatu anti-slip.',
     description:
       'Membantu persiapan bahan masakan dapur utama, menjaga sanitasi peralatan masak, dan membantu pengemasan pesanan pesan-antar.'
+  },
+  {
+    id: 'job-5',
+    title: 'Crew Bongkar Muat Logistik',
+    company: 'PT Karya Maju',
+    location: 'Bekasi',
+    rate: 190000,
+    workTime: '08:00 - 16:00',
+    scheduleType: 'Morning Shift',
+    category: 'Logistics & Warehouse',
+    quota: 12,
+    applicantsCount: 6,
+    integrityScore: '4.9 / 5.0 (Verified Partner)',
+    escrowHeld: 2280000,
+    escrowDisbursed: 0,
+    escrowStage: 'HELD',
+    status: 'OPEN',
+    matchScore: 96,
+    picName: 'Darmawan Putra (Koordinator Gudang)',
+    picPhone: '+62 812-7700-8811',
+    dresscode: 'Kaos lengan pendek rapi, celana panjang kerja, sepatu tertutup.',
+    description:
+      'Membantu pemindahan palet barang masuk dari armada ekspedisi, pengecekan jumlah karton, serta penataan rak area staging.'
+  },
+  {
+    id: 'job-6',
+    title: 'Usher & Registrasi Seminar Nasional',
+    company: 'PT Karya Maju',
+    location: 'Jakarta',
+    rate: 220000,
+    workTime: '07:30 - 15:30',
+    scheduleType: 'Morning Shift',
+    category: 'Event Staff',
+    quota: 8,
+    applicantsCount: 5,
+    integrityScore: '4.8 / 5.0 (Top Employer)',
+    escrowHeld: 1760000,
+    escrowDisbursed: 0,
+    escrowStage: 'HELD',
+    status: 'OPEN',
+    matchScore: 91,
+    picName: 'Rina Wijaya (Event Coordinator)',
+    picPhone: '+62 811-9021-3344',
+    dresscode: 'Blazer gelap atau kemeja putih formal, sepatu pantofel/flat rapi.',
+    description:
+      'Memandu tamu VIP dan peserta seminar menuju ruang auditorium, melakukan scan QR tiket masuk, dan membagikan seminar kit.'
+  },
+  {
+    id: 'job-7',
+    title: 'Kurir Sortir Promo Flash Sale (Arsip)',
+    company: 'FastLogistics ID',
+    location: 'Bekasi',
+    rate: 165000,
+    workTime: '20:00 - 04:00',
+    scheduleType: 'Night Shift',
+    category: 'Logistics & Warehouse',
+    quota: 6,
+    applicantsCount: 6,
+    integrityScore: '4.9 / 5.0 (Verified Partner)',
+    escrowHeld: 0,
+    escrowDisbursed: 0,
+    escrowStage: 'REFUNDED_CLOSED',
+    status: 'CLOSED',
+    matchScore: 87,
+    picName: 'Budi Hartono (Supervisor Shift Malam)',
+    picPhone: '+62 812-8890-1122',
+    dresscode: 'Sepatu tertutup dan rompi keselamatan disediakan di lokasi.',
+    description:
+      'Lowongan promo mingguan yang telah ditutup dan disembunyikan dari pencarian aktif pelamar (contoh status Ditutup untuk uji coba US-08).'
   }
 ];
 
@@ -1270,6 +1343,20 @@ const INITIAL_APPLICATIONS = [
     documents: [
       createSeedDoc('seed-app1-cv', 'CV', 'CV_Budi_Santoso_2026.pdf', 248000),
       createSeedDoc('seed-app1-ktp', 'KTP', 'KTP_Budi_Santoso_Verified.jpg', 192000, 'image/jpeg')
+    ]
+  },
+  {
+    id: 'app-3',
+    jobId: 'job-6',
+    jobTitle: 'Usher & Registrasi Seminar Nasional',
+    company: 'PT Karya Maju',
+    rate: 220000,
+    status: 'Diterima',
+    appliedAt: 'Kemarin, 16:05 WIB',
+    documents: [
+      createSeedDoc('seed-app3-cv', 'CV', 'CV_Budi_Santoso_2026.pdf', 248000),
+      createSeedDoc('seed-app3-ktp', 'KTP', 'KTP_Budi_Santoso_Verified.jpg', 192000, 'image/jpeg'),
+      createSeedDoc('seed-app3-sk', 'Surat Pendukung', 'Sertifikat_Event_Budi.pdf', 184000)
     ]
   },
   {
@@ -1325,10 +1412,55 @@ const INITIAL_CANDIDATES = [
     doc: 95,
     status: 'Diterima',
     appliedAt: 'Kemarin, 19:10 WIB',
-    notes: 'Dokumen KTP & CV lengkap, fisik prima.',
+    notes: 'Dokumen KTP & CV lengkap, fisik prima. Siap ditandai selesai setelah shift malam.',
     documents: [
       createSeedDoc('seed-c2-cv', 'CV', 'CV_Gede_Bagus_Teguh.pdf', 276000),
       createSeedDoc('seed-c2-ktp', 'KTP', 'KTP_Gede_Bagus.pdf', 164000)
+    ]
+  },
+  {
+    id: 'cand-5',
+    applicationId: null,
+    jobId: 'job-1',
+    name: 'Raka Pratama Wijaya',
+    email: 'raka.pratama@gmail.com',
+    phone: '+62 812-5544-3322',
+    city: 'Bekasi Timur',
+    roleTarget: 'Warehouse Packer (Night Shift)',
+    exp: 87,
+    avail: 94,
+    dist: 92,
+    doc: 95,
+    status: 'Diterima',
+    appliedAt: 'Kemarin, 17:45 WIB',
+    notes: 'Berpengalaman scanner barcode gudang e-commerce.',
+    documents: [
+      createSeedDoc('seed-c5-cv', 'CV', 'CV_Raka_Pratama_Logistik.pdf', 231000),
+      createSeedDoc('seed-c5-ktp', 'KTP', 'KTP_Raka_Pratama.jpg', 175000, 'image/jpeg')
+    ]
+  },
+  {
+    id: 'cand-6',
+    applicationId: null,
+    jobId: 'job-1',
+    name: 'Siti Rahmawati',
+    email: 'siti.rahmawati@gmail.com',
+    phone: '+62 856-9123-4411',
+    city: 'Tambun, Bekasi',
+    roleTarget: 'Warehouse Packer (Night Shift)',
+    exp: 91,
+    avail: 88,
+    dist: 89,
+    doc: 100,
+    status: 'Gaji Cair H+2',
+    appliedAt: '2 Hari Lalu',
+    payoutReleasedAt: '23 Nov 2026, 08:15 WIB',
+    payoutNetAmount: 157500,
+    notes: 'Shift malam selesai tepat waktu tanpa kendala.',
+    documents: [
+      createSeedDoc('seed-c6-cv', 'CV', 'CV_Siti_Rahmawati.pdf', 214000),
+      createSeedDoc('seed-c6-ktp', 'KTP', 'KTP_Siti_Rahmawati.jpg', 168000, 'image/jpeg'),
+      createSeedDoc('seed-c6-sk', 'Surat Pendukung', 'Surat_Sehat_Siti.pdf', 142000)
     ]
   },
   {
@@ -1353,6 +1485,69 @@ const INITIAL_CANDIDATES = [
     ]
   },
   {
+    id: 'cand-7',
+    applicationId: null,
+    jobId: 'job-2',
+    name: 'Nadia Putri Kusuma',
+    email: 'nadia.kusuma@gmail.com',
+    phone: '+62 811-7890-2211',
+    city: 'Serpong, Tangerang',
+    roleTarget: 'SPG Event Pameran',
+    exp: 93,
+    avail: 95,
+    dist: 96,
+    doc: 100,
+    status: 'Diterima',
+    appliedAt: 'Kemarin, 09:30 WIB',
+    notes: 'Berpengalaman sebagai SPG pameran teknologi & fasih presentasi produk.',
+    documents: [
+      createSeedDoc('seed-c7-cv', 'CV', 'CV_Nadia_Putri_SPG.pdf', 298000),
+      createSeedDoc('seed-c7-ktp', 'KTP', 'KTP_Nadia_Putri.jpg', 182000, 'image/jpeg'),
+      createSeedDoc('seed-c7-sk', 'Surat Pendukung', 'Portofolio_Event_Nadia.pdf', 415000)
+    ]
+  },
+  {
+    id: 'cand-8',
+    applicationId: null,
+    jobId: 'job-2',
+    name: 'Aulia Azzahra',
+    email: 'aulia.azzahra@gmail.com',
+    phone: '+62 818-4411-9090',
+    city: 'Bintaro, Tangerang Selatan',
+    roleTarget: 'SPG Event Pameran',
+    exp: 88,
+    avail: 91,
+    dist: 90,
+    doc: 95,
+    status: 'Diterima',
+    appliedAt: 'Kemarin, 13:20 WIB',
+    notes: 'Ramah, rapi, dan siap bertugas penuh di booth ICE BSD.',
+    documents: [
+      createSeedDoc('seed-c8-cv', 'CV', 'CV_Aulia_Azzahra.pdf', 260000),
+      createSeedDoc('seed-c8-ktp', 'KTP', 'KTP_Aulia_Azzahra.pdf', 171000)
+    ]
+  },
+  {
+    id: 'cand-9',
+    applicationId: null,
+    jobId: 'job-2',
+    name: 'Fajar Nugroho',
+    email: 'fajar.nugroho@gmail.com',
+    phone: '+62 852-3311-7788',
+    city: 'Depok, Jawa Barat',
+    roleTarget: 'SPG Event Pameran',
+    exp: 68,
+    avail: 70,
+    dist: 65,
+    doc: 80,
+    status: 'Ditolak',
+    appliedAt: '2 Hari Lalu',
+    notes: 'Jadwal tidak sesuai shift penuh pameran.',
+    documents: [
+      createSeedDoc('seed-c9-cv', 'CV', 'CV_Fajar_Nugroho.pdf', 198000)
+    ]
+  },
+  {
     id: 'cand-4',
     applicationId: null,
     jobId: 'job-3',
@@ -1371,6 +1566,72 @@ const INITIAL_CANDIDATES = [
     documents: [
       createSeedDoc('seed-c4-cv', 'CV', 'CV_Dwito_Fajar_Hospitality.pdf', 229000),
       createSeedDoc('seed-c4-ktp', 'KTP', 'KTP_Dwito_Fajar.pdf', 178000)
+    ]
+  },
+  {
+    id: 'cand-10',
+    applicationId: null,
+    jobId: 'job-3',
+    name: 'Dimas Arya Saputra',
+    email: 'dimas.arya@gmail.com',
+    phone: '+62 813-4567-8899',
+    city: 'Jakarta Selatan',
+    roleTarget: 'Banquet Waiter / Waitress',
+    exp: 90,
+    avail: 89,
+    dist: 93,
+    doc: 95,
+    status: 'Diterima',
+    appliedAt: 'Kemarin, 15:40 WIB',
+    notes: 'Lulusan perhotelan, menguasai standar fine dining & banquet.',
+    documents: [
+      createSeedDoc('seed-c10-cv', 'CV', 'CV_Dimas_Arya_Banquet.pdf', 284000),
+      createSeedDoc('seed-c10-ktp', 'KTP', 'KTP_Dimas_Arya.jpg', 190000, 'image/jpeg')
+    ]
+  },
+  {
+    id: 'cand-11',
+    applicationId: 'app-3',
+    jobId: 'job-6',
+    name: 'Budi Santoso',
+    email: 'budisantoso@gmail.com',
+    phone: '+62 812-3456-7890',
+    city: 'Bekasi, Jawa Barat',
+    roleTarget: 'Usher & Registrasi Seminar Nasional',
+    exp: 92,
+    avail: 94,
+    dist: 88,
+    doc: 100,
+    status: 'Diterima',
+    appliedAt: 'Kemarin, 16:05 WIB',
+    notes: 'Terhubung langsung dengan akun demo Pekerja Budi Santoso (uji coba Tandai Selesai per pekerja).',
+    documents: [
+      createSeedDoc('seed-c11-cv', 'CV', 'CV_Budi_Santoso_2026.pdf', 248000),
+      createSeedDoc('seed-c11-ktp', 'KTP', 'KTP_Budi_Santoso_Verified.jpg', 192000, 'image/jpeg'),
+      createSeedDoc('seed-c11-sk', 'Surat Pendukung', 'Sertifikat_Event_Budi.pdf', 184000)
+    ]
+  },
+  {
+    id: 'cand-12',
+    applicationId: 'app-2',
+    jobId: 'job-4',
+    name: 'Budi Santoso',
+    email: 'budisantoso@gmail.com',
+    phone: '+62 812-3456-7890',
+    city: 'Bekasi, Jawa Barat',
+    roleTarget: 'Kitchen Helper Harian',
+    exp: 90,
+    avail: 92,
+    dist: 85,
+    doc: 95,
+    status: 'Gaji Cair H+2',
+    appliedAt: '2 Hari Lalu',
+    payoutReleasedAt: '22 Nov 2026, 16:30 WIB',
+    payoutNetAmount: 135000,
+    notes: 'Pekerjaan dapur selesai dengan penilaian sangat baik.',
+    documents: [
+      createSeedDoc('seed-c12-cv', 'CV', 'CV_Budi_Santoso_2026.pdf', 248000),
+      createSeedDoc('seed-c12-ktp', 'KTP', 'KTP_Budi_Santoso_Verified.jpg', 192000, 'image/jpeg')
     ]
   }
 ];
@@ -1397,6 +1658,26 @@ const INITIAL_TRANSACTIONS = [
     createdAt: '20 Nov 2026, 10:15 WIB'
   },
   {
+    id: 'tx-4',
+    invoiceId: 'INV-HPY-2026-0928',
+    type: 'ESCROW_LOCK',
+    title: 'Penguncian Dana Escrow: Crew Bongkar Muat Logistik (12 Kuota)',
+    method: 'QRIS Korporat Instan',
+    amount: 2280000,
+    status: 'Terkunci di Escrow',
+    createdAt: '21 Nov 2026, 13:45 WIB'
+  },
+  {
+    id: 'tx-5',
+    invoiceId: 'INV-HPY-2026-0935',
+    type: 'ESCROW_REFUND',
+    title: 'Pengembalian Dana Escrow (Lowongan Ditutup): Kurir Sortir Promo Flash Sale',
+    method: 'Saldo HarianPay Korporat',
+    amount: 990000,
+    status: 'Dikembalikan',
+    createdAt: '21 Nov 2026, 19:10 WIB'
+  },
+  {
     id: 'tx-3',
     invoiceId: 'INV-HPY-2026-0942',
     type: 'PAYOUT_H2',
@@ -1405,6 +1686,16 @@ const INITIAL_TRANSACTIONS = [
     amount: 1200000,
     status: 'Telah Dicairkan',
     createdAt: '22 Nov 2026, 16:30 WIB'
+  },
+  {
+    id: 'tx-6',
+    invoiceId: 'INV-HPY-2026-0958',
+    type: 'PAYOUT_H2',
+    title: 'Pencairan Gaji H+2 (Siti Rahmawati) — Warehouse Packer (Night Shift)',
+    method: 'Auto-Disbursement Escrow HarianPay',
+    amount: 175000,
+    status: 'Telah Dicairkan',
+    createdAt: '23 Nov 2026, 08:15 WIB'
   }
 ];
 
@@ -2057,6 +2348,31 @@ export default function App() {
     setActiveView('landing');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     triggerToast('Anda telah keluar dari sesi akun.');
+  };
+
+  const handleResetDemoData = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem(HARIAN_DB_STORAGE_KEY);
+      } catch {
+        // Ignore storage cleanup error
+      }
+    }
+    setWorkerProfile(INITIAL_WORKER_PROFILE);
+    setWorkerProfileDraft(INITIAL_WORKER_PROFILE);
+    setHrdProfile(INITIAL_HRD_PROFILE);
+    setHrdProfileDraft(INITIAL_HRD_PROFILE);
+    setJobs(INITIAL_JOBS);
+    setApplications(INITIAL_APPLICATIONS);
+    setCandidates(INITIAL_CANDIDATES);
+    setHrdWalletBalance(25000000);
+    setPaymentTransactions(INITIAL_TRANSACTIONS);
+    setExpandedEscrowJobId(null);
+    setHrdJobStatusFilter('ALL');
+    setApplicantSearchQuery('');
+    setApplicantRoleFilter('ALL');
+    setApplicantStatusFilter('ALL');
+    triggerToast('Seluruh data dummy uji coba berhasil dikembalikan ke kondisi awal.');
   };
 
   const openProfileEditor = () => {
@@ -6725,6 +7041,14 @@ export default function App() {
               >
                 <Download className="w-4 h-4 text-accent-primary" />
                 <span>Unduh Laporan Rekrutmen (CSV)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleResetDemoData}
+                className="btn-pill-secondary w-full py-2 text-xs inline-flex items-center justify-center gap-1.5 text-[#526382]"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reset Data Dummy Uji Coba</span>
               </button>
             </div>
           </aside>
