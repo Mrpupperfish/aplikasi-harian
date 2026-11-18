@@ -967,6 +967,68 @@ const HarianLogo = ({ size = 'md' }) => {
 // 3. SPRINT 3 PERSISTENCE LAYER, FILE HELPERS, NATIVE DIALOG & INITIAL DATA
 // ============================================================================
 const HARIAN_DB_STORAGE_KEY = 'harian_sprint3_db_v2';
+const HARIAN_SESSION_STORAGE_KEY = 'harian_sprint3_session_v1';
+
+const loadPersistedSession = () => {
+  const fallback = {
+    authenticatedRole: null,
+    activeView: 'landing',
+    workerSubTab: 'explore',
+    hrdSubTab: 'jobs',
+    profileStep: 1,
+    expandedEscrowJobId: null
+  };
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(HARIAN_SESSION_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    const role =
+      parsed.authenticatedRole === 'worker' || parsed.authenticatedRole === 'hrd'
+        ? parsed.authenticatedRole
+        : null;
+
+    let view = parsed.activeView || 'landing';
+    if (role === 'worker') {
+      if (view !== 'worker' && view !== 'profile') view = 'worker';
+    } else if (role === 'hrd') {
+      if (view !== 'hrd' && view !== 'profile') view = 'hrd';
+    } else {
+      const publicViews = [
+        'landing',
+        'login',
+        'register',
+        'onboarding-worker',
+        'onboarding-hrd'
+      ];
+      if (!publicViews.includes(view)) view = 'landing';
+    }
+
+    const workerSubTab =
+      parsed.workerSubTab === 'applications' ? 'applications' : 'explore';
+    const hrdSubTab = ['jobs', 'applicants', 'mfep', 'escrow'].includes(
+      parsed.hrdSubTab
+    )
+      ? parsed.hrdSubTab
+      : 'jobs';
+    const profileStep = parsed.profileStep === 2 ? 2 : 1;
+    const expandedEscrowJobId =
+      typeof parsed.expandedEscrowJobId === 'string'
+        ? parsed.expandedEscrowJobId
+        : null;
+
+    return {
+      authenticatedRole: role,
+      activeView: view,
+      workerSubTab,
+      hrdSubTab,
+      profileStep,
+      expandedEscrowJobId
+    };
+  } catch {
+    return fallback;
+  }
+};
 const RUNTIME_LARGE_FILE_CACHE = new Map();
 const ALLOWED_DOC_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
 const MAX_DOC_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -1914,22 +1976,28 @@ const FOOTER_INFO_CONTENT = {
 // 4. MAIN REACT APPLICATION COMPONENT
 // ============================================================================
 export default function App() {
-  // Navigation & View State
+  // Restore Last Visited Session, View & Sub-Tab Across Page Refreshes
+  const initialSession = useMemo(() => loadPersistedSession(), []);
   // 'landing' | 'login' | 'register' | 'onboarding-worker' | 'onboarding-hrd' | 'profile' | 'worker' | 'hrd'
-  const [activeView, setActiveView] = useState('landing');
-  const [authenticatedRole, setAuthenticatedRole] = useState(null); // null | 'worker' | 'hrd'
+  const [activeView, setActiveView] = useState(initialSession.activeView);
+  const [authenticatedRole, setAuthenticatedRole] = useState(
+    initialSession.authenticatedRole
+  ); // null | 'worker' | 'hrd'
   const [isNavScrolled, setIsNavScrolled] = useState(false);
-  const [showInitialBootSplash, setShowInitialBootSplash] = useState(true);
+  const [showInitialBootSplash, setShowInitialBootSplash] = useState(
+    initialSession.activeView === 'landing' && !initialSession.authenticatedRole
+  );
   const [toastMessage, setToastMessage] = useState(null);
 
   // Unmount initial boot splash overlay once its entrance curtain finishes
   useEffect(() => {
+    if (!showInitialBootSplash) return;
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
     const timer = setTimeout(() => {
       setShowInitialBootSplash(false);
     }, isMobile ? 580 : 1220);
     return () => clearTimeout(timer);
-  }, []);
+  }, [showInitialBootSplash]);
 
   // Landing Page (Versi Gaya D) Interactive States
   const [heroRoleSegment, setHeroRoleSegment] = useState('all'); // 'all' | 'worker' | 'hrd'
@@ -1972,7 +2040,7 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('budisantoso@gmail.com');
   const [loginPassword, setLoginPassword] = useState('harian123');
   const [loginError, setLoginError] = useState('');
-  const [profileStep, setProfileStep] = useState(1);
+  const [profileStep, setProfileStep] = useState(initialSession.profileStep);
   const [workerProfile, setWorkerProfile] = useState(initialDb.workerProfile);
   const [workerProfileDraft, setWorkerProfileDraft] = useState(initialDb.workerProfile);
   const [hrdProfileDraft, setHrdProfileDraft] = useState(initialDb.hrdProfile);
@@ -1992,8 +2060,8 @@ export default function App() {
     initialDb.jobs[0]?.id || INITIAL_JOBS[0].id
   );
   const [jobDetailModalId, setJobDetailModalId] = useState(null);
-  const [workerSubTab, setWorkerSubTab] = useState('explore'); // 'explore' | 'applications'
-  const [hrdSubTab, setHrdSubTab] = useState('jobs'); // 'jobs' | 'applicants' | 'mfep' | 'escrow'
+  const [workerSubTab, setWorkerSubTab] = useState(initialSession.workerSubTab); // 'explore' | 'applications'
+  const [hrdSubTab, setHrdSubTab] = useState(initialSession.hrdSubTab); // 'jobs' | 'applicants' | 'mfep' | 'escrow'
   const [hrdWalletBalance, setHrdWalletBalance] = useState(initialDb.hrdWalletBalance);
   const [paymentTransactions, setPaymentTransactions] = useState(
     initialDb.paymentTransactions
@@ -2024,11 +2092,40 @@ export default function App() {
   const [previewDocModal, setPreviewDocModal] = useState(null);
 
   // US-17: Payment Processor (HarianPay Gateway) States
-  const [expandedEscrowJobId, setExpandedEscrowJobId] = useState(null);
+  const [expandedEscrowJobId, setExpandedEscrowJobId] = useState(
+    initialSession.expandedEscrowJobId
+  );
   const [paymentModal, setPaymentModal] = useState(null);
   const [paymentModalError, setPaymentModalError] = useState('');
   const [receiptPreviewTx, setReceiptPreviewTx] = useState(null);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
+
+  // Persist Active Session, Last Visited View & Sub-Tabs Across Browser Refreshes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        HARIAN_SESSION_STORAGE_KEY,
+        JSON.stringify({
+          authenticatedRole,
+          activeView,
+          workerSubTab,
+          hrdSubTab,
+          profileStep,
+          expandedEscrowJobId
+        })
+      );
+    } catch {
+      // Ignore storage errors in restricted browsing modes
+    }
+  }, [
+    authenticatedRole,
+    activeView,
+    workerSubTab,
+    hrdSubTab,
+    profileStep,
+    expandedEscrowJobId
+  ]);
 
   // Filter State (UC-05)
   const [filterKeyword, setFilterKeyword] = useState('');
