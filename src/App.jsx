@@ -134,26 +134,195 @@ const GlobalLightThemeStyles = () => (
         radial-gradient(circle at 28% 60%, rgba(255, 246, 232, 0.75) 0%, rgba(255, 246, 232, 0) 50%);
     }
 
-    /* Translucent Frosted Acrylic Glass Card (Clarity Engine Style) */
-    .harian-surface-card {
+    /* True Tactile Frosted Glass Card (Atlas + Pricing Card + Frosted Concept Reference) */
+    .harian-frosted-showcase {
+      position: relative;
       background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.56) 0%,
-        rgba(255, 255, 255, 0.34) 52%,
-        rgba(240, 247, 255, 0.50) 100%
+        145deg,
+        rgba(255, 255, 255, 0.78) 0%,
+        rgba(246, 250, 255, 0.56) 48%,
+        rgba(234, 242, 255, 0.68) 100%
       );
-      backdrop-filter: blur(36px) saturate(190%);
-      -webkit-backdrop-filter: blur(36px) saturate(190%);
-      border: 1.5px solid rgba(255, 255, 255, 0.78);
-      outline: 1px solid rgba(255, 255, 255, 0.28);
-      border-radius: 28px;
+      backdrop-filter: blur(46px) saturate(210%);
+      -webkit-backdrop-filter: blur(46px) saturate(210%);
+      border: 1.5px solid rgba(255, 255, 255, 0.92);
+      outline: 1px solid rgba(15, 27, 51, 0.06);
+      border-radius: 34px;
       box-shadow:
-        0 28px 68px rgba(18, 56, 142, 0.14),
-        0 6px 20px rgba(18, 56, 142, 0.06),
-        inset 0 1.5px 2px rgba(255, 255, 255, 0.92),
-        inset 0 -1px 2px rgba(255, 255, 255, 0.45);
-      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.28s ease, box-shadow 0.28s ease;
+        0 34px 84px -18px rgba(15, 27, 51, 0.18),
+        0 14px 36px -10px rgba(29, 111, 232, 0.14),
+        inset 0 1.5px 2px rgba(255, 255, 255, 0.98),
+        inset 0 -1.5px 2px rgba(29, 111, 232, 0.10);
+      overflow: hidden;
+    }
+
+    /* Subtle Frosted Micro-Grain Texture Overlay so Glass Never Looks Flat */
+    .harian-frosted-grain {
+      background-image: radial-gradient(rgba(15, 27, 51, 0.045) 1px, transparent 0);
+      background-size: 14px 14px;
+    }
+
+    /* Redsun-Style Luminous Horizon Arch Behind Hero Stage */
+    .redsun-horizon-arch {
+      position: absolute;
+      left: 50%;
+      bottom: -240px;
+      transform: translateX(-50%);
+      width: 1120px;
+      height: 540px;
+      border-radius: 9999px 9999px 0 0;
+      background:
+        radial-gradient(ellipse at 50% 24%, rgba(255, 255, 255, 0.92) 0%, rgba(59, 130, 246, 0.44) 36%, rgba(29, 78, 216, 0.24) 64%, rgba(29, 78, 216, 0) 78%);
+      border-top: 2px solid rgba(255, 255, 255, 0.92);
+      box-shadow:
+        0 -20px 68px rgba(37, 99, 235, 0.32),
+        0 -4px 24px rgba(251, 191, 36, 0.24),
+        inset 0 16px 42px rgba(255, 255, 255, 0.78);
+      pointer-events: none;
+      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s linear;
       will-change: transform, opacity;
+    }
+
+    /* Segmented Frosted Pill Bar (Pricing Card Basic | Standard | Premium Reference) */
+    .frosted-segmented-bar {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px;
+      border-radius: 9999px;
+      background: rgba(15, 27, 51, 0.07);
+      backdrop-filter: blur(22px) saturate(180%);
+      -webkit-backdrop-filter: blur(22px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.86);
+      box-shadow:
+        inset 0 1px 3px rgba(15, 27, 51, 0.08),
+        0 6px 20px rgba(15, 27, 51, 0.05);
+    }
+
+    .frosted-segmented-pill {
+      padding: 8px 18px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+      transition: all 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: pointer;
+    }
+
+    .frosted-segmented-pill.is-active {
+      background: rgba(255, 255, 255, 0.94);
+      color: #0B1528;
+      box-shadow:
+        0 4px 14px rgba(15, 27, 51, 0.12),
+        inset 0 1px 1px rgba(255, 255, 255, 1);
+    }
+
+    /* Translucent Frosted Acrylic Glass Card (Clarity Engine & Frosted Concept Style) */
+    .harian-surface-card {
+      position: relative;
+      background: linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.76) 0%,
+        rgba(248, 251, 255, 0.54) 52%,
+        rgba(236, 244, 255, 0.68) 100%
+      );
+      backdrop-filter: blur(42px) saturate(200%);
+      -webkit-backdrop-filter: blur(42px) saturate(200%);
+      border: 1.5px solid rgba(255, 255, 255, 0.92);
+      outline: 1px solid rgba(15, 27, 51, 0.05);
+      border-radius: 30px;
+      box-shadow:
+        0 28px 68px -14px rgba(15, 27, 51, 0.16),
+        0 10px 26px -8px rgba(29, 111, 232, 0.10),
+        inset 0 1.5px 2px rgba(255, 255, 255, 0.98),
+        inset 0 -1px 2px rgba(29, 111, 232, 0.08);
+      transition:
+        transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+        border-color 0.32s ease,
+        box-shadow 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform, opacity;
+    }
+
+    .harian-role-frosted-card {
+      position: relative;
+      background: linear-gradient(
+        155deg,
+        rgba(255, 255, 255, 0.80) 0%,
+        rgba(245, 249, 255, 0.56) 50%,
+        rgba(232, 241, 255, 0.72) 100%
+      );
+      backdrop-filter: blur(44px) saturate(210%);
+      -webkit-backdrop-filter: blur(44px) saturate(210%);
+      border: 1.5px solid rgba(255, 255, 255, 0.94);
+      outline: 1px solid rgba(15, 27, 51, 0.06);
+      border-radius: 30px;
+      box-shadow:
+        0 30px 72px -16px rgba(15, 27, 51, 0.18),
+        0 12px 28px -8px rgba(29, 111, 232, 0.12),
+        inset 0 2px 3px rgba(255, 255, 255, 1),
+        inset 0 -1.5px 2px rgba(29, 111, 232, 0.10);
+      transition:
+        transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+        box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+        border-color 0.3s ease;
+      overflow: hidden;
+      will-change: transform, opacity;
+    }
+
+    .harian-role-frosted-card:hover {
+      transform: translate3d(0, -7px, 0) scale(1.01);
+      border-color: #FFFFFF;
+      box-shadow:
+        0 38px 88px -14px rgba(15, 27, 51, 0.22),
+        0 16px 36px -8px rgba(29, 111, 232, 0.18),
+        inset 0 2px 4px rgba(255, 255, 255, 1);
+    }
+
+    /* Choreographed Hero Stagger Entrance (Blur-to-Sharp + Spring Lift) */
+    @keyframes frostedHeroRise {
+      0% {
+        opacity: 0;
+        filter: blur(12px);
+        transform: translate3d(0, 34px, 0) scale(0.955);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
+    .hero-stagger-1 {
+      animation: frostedHeroRise 0.72s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
+    }
+    .hero-stagger-2 {
+      animation: frostedHeroRise 0.78s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+    }
+    .hero-stagger-3 {
+      animation: frostedHeroRise 0.82s cubic-bezier(0.16, 1, 0.3, 1) 0.20s both;
+    }
+    .hero-stagger-4 {
+      animation: frostedHeroRise 0.88s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both;
+    }
+    .hero-stagger-5 {
+      animation: frostedHeroRise 0.94s cubic-bezier(0.16, 1, 0.3, 1) 0.36s both;
+    }
+
+    /* Role Filter Card Switch Animation */
+    @keyframes roleCardMorph {
+      0% {
+        opacity: 0;
+        filter: blur(8px);
+        transform: translate3d(0, 18px, 0) scale(0.97);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
+    .role-card-morph {
+      animation: roleCardMorph 0.52s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
 
     .harian-blog-card {
@@ -381,50 +550,58 @@ const GlobalLightThemeStyles = () => (
 
     /* GPU-Only View Switch Transition */
     .view-transition-enter {
-      animation: viewEnter 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-      will-change: transform, opacity;
+      animation: viewEnter 0.48s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, opacity, filter;
     }
 
     @keyframes viewEnter {
       from {
         opacity: 0;
-        transform: translate3d(0, 14px, 0);
+        filter: blur(8px);
+        transform: translate3d(0, 20px, 0) scale(0.985);
       }
       to {
         opacity: 1;
-        transform: translate3d(0, 0, 0);
+        filter: blur(0px);
+        transform: translate3d(0, 0, 0) scale(1);
       }
     }
 
-    /* Smooth Scroll-Down Reveal & Stagger Transitions (60fps GPU) */
+    /* Smooth Scroll-Down Reveal & Stagger Transitions (60fps GPU + Redsun Depth) */
     .scroll-reveal-section {
       opacity: 0;
-      transform: translate3d(0, 44px, 0) scale(0.985);
+      filter: blur(8px);
+      transform: translate3d(0, 52px, 0) scale(0.968);
       transition:
-        opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
-        transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
-      will-change: transform, opacity;
+        opacity 0.88s cubic-bezier(0.16, 1, 0.3, 1),
+        filter 0.88s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.88s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform, opacity, filter;
     }
 
     .scroll-reveal-section.is-inview {
       opacity: 1;
+      filter: blur(0px);
       transform: translate3d(0, 0, 0) scale(1);
     }
 
     .scroll-reveal-card {
       opacity: 0;
-      transform: translate3d(0, 36px, 0) scale(0.97);
+      filter: blur(6px);
+      transform: translate3d(0, 40px, 0) scale(0.955);
       transition:
-        opacity 0.78s cubic-bezier(0.22, 1, 0.36, 1),
-        transform 0.78s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.82s cubic-bezier(0.16, 1, 0.3, 1),
+        filter 0.82s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.82s cubic-bezier(0.16, 1, 0.3, 1),
         border-color 0.28s ease,
         box-shadow 0.28s ease;
       transition-delay: var(--stagger-delay, 0ms);
-      will-change: transform, opacity;
+      will-change: transform, opacity, filter;
     }
 
     .scroll-reveal-card.is-inview {
       opacity: 1;
+      filter: blur(0px);
       transform: translate3d(0, 0, 0) scale(1);
     }
 
@@ -934,6 +1111,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState(null);
 
   // Landing Page (Versi Gaya D) Interactive States
+  const [heroRoleSegment, setHeroRoleSegment] = useState('all'); // 'all' | 'worker' | 'hrd'
   const [caraKerjaTab, setCaraKerjaTab] = useState('worker'); // 'worker' | 'hrd'
   const [activeAccessStep, setActiveAccessStep] = useState(0);
   const [footerModalKey, setFooterModalKey] = useState(null);
@@ -1042,6 +1220,7 @@ export default function App() {
   const heroSectionRef = useRef(null);
   const heroHeadlineRef = useRef(null);
   const heroMockupRef = useRef(null);
+  const heroHorizonArchRef = useRef(null);
   const cloudLayerSlowRef = useRef(null);
   const cloudLayerFastRef = useRef(null);
   const footerSectionRef = useRef(null);
@@ -1079,10 +1258,18 @@ export default function App() {
       }
 
       if (heroMockupRef.current) {
-        const progress = Math.min(1, Math.max(0, y / 460));
-        const liftY = (1 - progress) * 18 - progress * 14;
-        const scale = 0.97 + progress * 0.03;
+        const progress = Math.min(1, Math.max(0, y / 520));
+        const liftY = -progress * 18;
+        const scale = 1 - progress * 0.025;
         heroMockupRef.current.style.transform = `translate3d(0, ${liftY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+      }
+
+      if (heroHorizonArchRef.current) {
+        const progress = Math.min(1, Math.max(0, y / 540));
+        const archScale = 1 + progress * 0.14;
+        const archY = progress * 34;
+        heroHorizonArchRef.current.style.transform = `translate3d(-50%, ${archY.toFixed(1)}px, 0) scale(${archScale.toFixed(3)})`;
+        heroHorizonArchRef.current.style.opacity = Math.max(0.25, 1 - progress * 0.65).toFixed(3);
       }
 
       if (cloudLayerSlowRef.current) {
@@ -1156,667 +1343,345 @@ export default function App() {
   }, [activeView, workerSubTab, hrdSubTab]);
 
   // ============================================================================
-  // 6. COMPUTED FILTERED JOBS (PORTAL) + MFEP RANKINGS
-  // ============================================================================
-  const filteredJobs = useMemo(() => {
-    const kw = filterKeyword.trim().toLowerCase();
-    const minRate = Number(filterMinRate || 0);
-    return jobs.filter((job) => {
-      const matchKw =
-        !kw ||
-        job.title.toLowerCase().includes(kw) ||
-        job.company.toLowerCase().includes(kw);
-      const matchLoc =
-        filterLocation === 'ALL' ||
-        job.location.toLowerCase().includes(filterLocation.toLowerCase());
-      const matchCat =
-        filterCategory === 'ALL' || job.category === filterCategory;
-      const matchShift =
-        filterShift === 'ALL' || job.scheduleType === filterShift;
-      const matchRate = job.rate >= minRate;
-      return matchKw && matchLoc && matchCat && matchShift && matchRate;
-    });
-  }, [
-    jobs,
-    filterKeyword,
-    filterLocation,
-    filterCategory,
-    filterShift,
-    filterMinRate
-  ]);
-
-  const selectedJob = useMemo(
-    () => jobs.find((j) => j.id === selectedJobId) || jobs[0],
-    [jobs, selectedJobId]
-  );
-
-  const rankedCandidates = useMemo(() => {
-    const totalWeight =
-      mfepWeights.exp +
-        mfepWeights.avail +
-        mfepWeights.dist +
-        mfepWeights.doc || 100;
-    return candidates
-      .map((c) => {
-        const weightedExp = (c.exp * (mfepWeights.exp / totalWeight)) / 100;
-        const weightedAvail =
-          (c.avail * (mfepWeights.avail / totalWeight)) / 100;
-        const weightedDist = (c.dist * (mfepWeights.dist / totalWeight)) / 100;
-        const weightedDoc = (c.doc * (mfepWeights.doc / totalWeight)) / 100;
-        const totalScore =
-          weightedExp + weightedAvail + weightedDist + weightedDoc;
-        return {
-          ...c,
-          weightedExp: weightedExp.toFixed(3),
-          weightedAvail: weightedAvail.toFixed(3),
-          weightedDist: weightedDist.toFixed(3),
-          weightedDoc: weightedDoc.toFixed(3),
-          mfepScore: totalScore.toFixed(3)
-        };
-      })
-      .sort((a, b) => Number(b.mfepScore) - Number(a.mfepScore));
-  }, [candidates, mfepWeights]);
-
-  // ============================================================================
-  // 7. INTERACTIVE HANDLERS (ALL RKPL USE CASES + GAYA D ONBOARDING)
-  // ============================================================================
-  const switchView = (targetView) => {
-    setActiveView(targetView);
-    window.scrollTo({ top: 0, behavior: 'auto' });
-  };
-
-  const openRoleLogin = (role) => {
-    setLoginRole(role);
-    setLoginError('');
-    setLoginEmail(
-      role === 'worker' ? 'budisantoso@gmail.com' : 'hrd@karyamaju.co.id'
-    );
-    setLoginPassword('harian123');
-    switchView('login');
-  };
-
-  const openRoleRegister = (role) => {
-    setRegisterRole(role);
-    setRegisterEmail(
-      role === 'worker' ? 'budi.santoso@gmail.com' : 'rekrutmen@karyamaju.co.id'
-    );
-    setRegisterPassword('harian123');
-    setRegisterConfirmPassword('harian123');
-    setAgreeServiceFee(false);
-    switchView('register');
-  };
-
-  const handleRegisterSubmit = (e) => {
-    e.preventDefault();
-    if (!agreeServiceFee) {
-      triggerToast('Harap centang persetujuan Syarat & Ketentuan (S&K) serta Service Charge 10%.');
-      return;
-    }
-    if (!registerEmail.includes('@') || registerPassword.length < 4) {
-      triggerToast('Masukkan email yang valid dan kata sandi minimal 4 karakter.');
-      return;
-    }
-    if (registerPassword !== registerConfirmPassword) {
-      triggerToast('Konfirmasi kata sandi tidak cocok.');
-      return;
-    }
-    if (registerRole === 'worker') {
-      if (!workerProfile.fullName.trim() || !workerProfile.phone.trim()) {
-        triggerToast('Mohon lengkapi biodata Nama Lengkap dan Nomor WhatsApp.');
-        return;
-      }
-      if (newExpRole.trim() && newExpCompany.trim()) {
-        setWorkerProfile((prev) => ({
-          ...prev,
-          experiences: [
-            ...prev.experiences,
-            {
-              id: 'exp-' + Date.now(),
-              role: newExpRole.trim(),
-              company: newExpCompany.trim(),
-              period: '2026 (Terverifikasi)'
-            }
-          ]
-        }));
-      }
-      setFilterLocation(workerFavLocation);
-      setFilterCategory(workerFavCategory);
-      setAuthenticatedRole('worker');
-      triggerToast(
-        `Pendaftaran selesai! Selamat datang, ${workerProfile.fullName}.`
-      );
-      switchView('worker');
-    } else {
-      if (!hrdProfile.companyName.trim()) {
-        triggerToast('Mohon isi Nama Perusahaan / Instansi.');
-        return;
-      }
-      setAuthenticatedRole('hrd');
-      triggerToast(
-        `Akun Instansi ${hrdProfile.companyName} berhasil didaftarkan!`
-      );
-      switchView('hrd');
-    }
-  };
-
-  const handleLoginSubmit = (e) => {
-    e.preventDefault();
-    if (loginPassword === 'salah123' || !loginEmail.includes('@')) {
-      setLoginError('Email atau Password salah, silahkan coba lagi.');
-      return;
-    }
-    setLoginError('');
-    if (loginRole === 'hrd') {
-      setAuthenticatedRole('hrd');
-      triggerToast('Berhasil masuk ke Portal Instansi PT Karya Maju.');
-      switchView('hrd');
-    } else {
-      setAuthenticatedRole('worker');
-      triggerToast('Berhasil masuk sebagai Budi Santoso (Pekerja Harian).');
-      switchView('worker');
-    }
-  };
-
-  const handleLogout = () => {
-    setAuthenticatedRole(null);
-    triggerToast('Anda telah keluar dari sesi akun Harian.');
-    switchView('landing');
-  };
-
-  const handleDownloadTermsPdfFile = () => {
-    const docContent = [
-      '====================================================================',
-      'DOKUMEN RESMI: SYARAT DAN KETENTUAN PENGGUNAAN PLATFORM HARIAN 2026',
-      'No. Dokumen: SK-HARIAN/ESCROW/2026/V1.4',
-      '====================================================================',
-      '',
-      'PASAL 1 - DEFINISI & RUANG LINGKUP LAYANAN',
-      'Platform Harian ("Sistem") adalah aplikasi web murni yang mempertemukan',
-      'Pekerja Harian (Daily Worker) dengan Instansi Pemberi Kerja secara transparan.',
-      '',
-      'PASAL 2 - MEKANISME ESCROW & JAMINAN PENCAIRAN GAJI MAKSIMAL H+2',
-      '1. Instansi wajib menyetorkan 100% dana upah (Kuota Pekerja x Upah Harian)',
-      '   ke rekening bersama (Escrow HarianPay) sebelum lowongan dipublikasikan.',
-      '2. Pencairan upah ke rekening Pekerja Harian dilakukan secara otomatis',
-      '   selambat-lambatnya 2x24 jam (H+2) setelah pekerjaan ditandai selesai.',
-      '',
-      'PASAL 3 - KETENTUAN POTONGAN BIAYA LAYANAN (SERVICE CHARGE 10%)',
-      '1. Setiap transaksi pencairan upah dikenakan biaya layanan platform',
-      '   (Service Charge) sebesar 10% dari nominal upah kotor harian.',
-      '2. Pekerja Harian menerima bersih 90% dari nominal upah yang tertera.',
-      '   Contoh: Upah Rp 150.000 -> Service Charge Rp 15.000 -> Bersih Rp 135.000.',
-      '',
-      'PASAL 4 - SELEKSI OBJEKTIF METODE MFEP & KEAKURATAN BIODATA',
-      '1. Pengguna wajib mendaftarkan identitas KTP dan rekening bank/e-wallet valid.',
-      '2. Seleksi kandidat dilakukan menggunakan algoritma Multi-Factor Evaluation',
-      '   Process (MFEP) berdasarkan pengalaman, jam shift, domisili, dan dokumen.',
-      '',
-      'PASAL 5 - PEMBATALAN LAMARAN & SANKSI PELANGGARAN',
-      '1. Pekerja dapat membatalkan lamaran selama status masih "Pending".',
-      '2. Ketidakhadiran tanpa keterangan setelah status "Diterima" akan menurunkan',
-      '   skor reputasi akun pada sistem Harian.',
-      '===================================================================='
-    ].join('\n');
-
-    const blob = new Blob([docContent], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'Syarat_dan_Ketentuan_Harian_2026.pdf';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    triggerToast('File PDF Syarat & Ketentuan berhasil diunduh.');
-  };
-
-  const handleAddExperience = () => {
-    if (!newExpRole.trim() || !newExpCompany.trim()) {
-      triggerToast('Mohon isi posisi dan nama perusahaan pengalaman kerja.');
-      return;
-    }
-    setWorkerProfile((prev) => ({
-      ...prev,
-      experiences: [
-        ...prev.experiences,
-        {
-          id: 'exp-' + Date.now(),
-          role: newExpRole.trim(),
-          company: newExpCompany.trim(),
-          period: '2026 (Terverifikasi)'
-        }
-      ]
-    }));
-    setNewExpRole('');
-    setNewExpCompany('');
-    triggerToast('Pengalaman kerja berhasil ditambahkan untuk algoritma rekomendasi.');
-  };
-
-  const handleApplyToJob = (job) => {
-    const exists = applications.some(
-      (a) => a.jobId === job.id && a.status !== 'Dibatalkan'
-    );
-    if (exists) {
-      triggerToast('Anda sudah melamar pekerjaan ini sebelumnya.');
-      return;
-    }
-    if (job.applicantsCount >= job.quota + 20) {
-      triggerToast('Kuota pelamar penuh untuk lowongan ini.');
-      return;
-    }
-    const newApp = {
-      id: 'app-' + Date.now(),
-      jobId: job.id,
-      jobTitle: job.title,
-      company: job.company,
-      rate: job.rate,
-      status: 'Pending',
-      appliedAt: 'Baru saja'
-    };
-    setApplications((prev) => [newApp, ...prev]);
-    setJobs((prev) =>
-      prev.map((j) =>
-        j.id === job.id ? { ...j, applicantsCount: j.applicantsCount + 1 } : j
-      )
-    );
-    triggerToast(
-      `Lamaran & berkas KTP untuk "${job.title}" berhasil disimpan! Status: Pending.`
-    );
-  };
-
-  const handleCancelApplication = (appId) => {
-    const target = applications.find((a) => a.id === appId);
-    if (!target) return;
-    if (target.status !== 'Pending') {
-      triggerToast('Lamaran sudah diproses dan tidak dapat dibatalkan.');
-      return;
-    }
-    setApplications((prev) =>
-      prev.map((a) => (a.id === appId ? { ...a, status: 'Dibatalkan' } : a))
-    );
-    triggerToast('Lamaran berhasil dibatalkan dan antrean dikosongkan.');
-  };
-
-  const handleCandidateDecision = (candId, decision) => {
-    const target = candidates.find((c) => c.id === candId);
-    if (!target) return;
-    setCandidates((prev) =>
-      prev.map((c) => (c.id === candId ? { ...c, status: decision } : c))
-    );
-    if (target.name === 'Budi Santoso') {
-      setApplications((prev) =>
-        prev.map((a, idx) => (idx === 0 ? { ...a, status: decision } : a))
-      );
-    }
-    triggerToast(
-      `Status kandidat ${target.name} diperbarui menjadi "${decision}" secara real-time!`
-    );
-  };
-
-  const handleReleaseEscrowH2 = (jobId) => {
-    const targetJob = jobs.find((j) => j.id === jobId);
-    if (!targetJob) return;
-    setJobs((prev) =>
-      prev.map((j) => (j.id === jobId ? { ...j, escrowStage: 'PAID_H2' } : j))
-    );
-    setApplications((prev) =>
-      prev.map((a) =>
-        a.jobId === jobId ? { ...a, status: 'Gaji Cair H+2' } : a
-      )
-    );
-    triggerToast(
-      `Pekerjaan "${targetJob.title}" selesai! Gaji H+2 otomatis ditransfer ke rekening pekerja (potong Service Fee 10%).`
-    );
-  };
-
-  const handleCreateJobSubmit = (e) => {
-    e.preventDefault();
-    const rateNum = Number(newJobForm.rate || 0);
-    const quotaNum = Number(newJobForm.quota || 0);
-    if (rateNum < 100000) {
-      setCreateJobError(
-        'Peringatan: Nominal upah harian berada di bawah standar kelayakan minimum (Rp 100.000).'
-      );
-      return;
-    }
-    const totalEscrow = rateNum * quotaNum;
-    if (totalEscrow > hrdWalletBalance) {
-      setCreateJobError(
-        'Saldo HarianPay Korporat tidak mencukupi untuk menahan dana Escrow di awal.'
-      );
-      return;
-    }
-    setCreateJobError('');
-    const createdJob = {
-      id: 'job-' + Date.now(),
-      title: newJobForm.title || 'Crew Operasional Harian',
-      company: 'PT Karya Maju',
-      location: newJobForm.location,
-      rate: rateNum,
-      workTime: newJobForm.workTime,
-      scheduleType: newJobForm.scheduleType,
-      category: newJobForm.category,
-      quota: quotaNum,
-      applicantsCount: 1,
-      integrityScore: '4.9 / 5.0 (Verified Partner)',
-      escrowHeld: totalEscrow,
-      escrowStage: 'HELD',
-      matchScore: 94,
-      picName: newJobForm.picName,
-      picPhone: newJobForm.picPhone,
-      dresscode: newJobForm.dresscode,
-      description: newJobForm.description
-    };
-    setJobs((prev) => [createdJob, ...prev]);
-    setHrdWalletBalance((prev) => prev - totalEscrow);
-    setSelectedJobId(createdJob.id);
-    setShowCreateJobModal(false);
-    triggerToast(
-      `Lowongan "${createdJob.title}" dipublikasikan & dana Escrow ${formatRupiah(totalEscrow)} berhasil ditahan!`
-    );
-  };
-
-  const handleDownloadCsv = () => {
-    const accepted = rankedCandidates.filter((c) => c.status === 'Diterima');
-    if (accepted.length === 0) {
-      triggerToast(
-        'Laporan kosong. Belum ada kandidat yang diterima untuk diekspor.'
-      );
-      return;
-    }
-    const headers = [
-      'Nama Kandidat',
-      'Posisi',
-      'Skor MFEP',
-      'Pengalaman',
-      'Ketersediaan Shift',
-      'Domisili',
-      'Dokumen',
-      'Status'
-    ];
-    const rows = rankedCandidates.map((c) => [
-      `"${c.name}"`,
-      `"${c.roleTarget}"`,
-      c.mfepScore,
-      c.exp,
-      c.avail,
-      c.dist,
-      c.doc,
-      c.status
-    ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', 'Laporan_Rekrutmen_Harian_MFEP.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    triggerToast('Laporan Rekrutmen (CSV) berhasil diunduh dalam < 2 detik!');
-  };
-
-  const scrollToSection = (sectionId) => {
-    if (activeView !== 'landing') {
-      setActiveView('landing');
-      setTimeout(() => {
-        const el = document.getElementById(sectionId);
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    } else {
-      const el = document.getElementById(sectionId);
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  // ============================================================================
-  // 8. RENDER STICKY GLASS NAVBAR
-  // ============================================================================
-  const renderStickyNavbar = () => (
-    <header
-      className={`sticky-glass-nav fixed top-0 left-0 right-0 z-50 px-4 sm:px-8 ${
-        isNavScrolled ? 'py-2.5' : 'py-3.5'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        <button
-          type="button"
-          onClick={() => switchView('landing')}
-          className="flex items-center gap-2 focus:outline-none"
-        >
-          <HarianLogo size="sm" />
-        </button>
-
-        <nav className="hidden md:flex items-center gap-6 text-xs sm:text-sm">
-          <button
-            type="button"
-            onClick={() => switchView('landing')}
-            className={`nav-link-animated ${
-              activeView === 'landing' ? 'active' : ''
-            }`}
-          >
-            Get Started
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection('caraAksesSection')}
-            className="nav-link-animated"
-          >
-            Cara Akses
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection('kenapaHarianSection')}
-            className="nav-link-animated"
-          >
-            Kenapa Harian?
-          </button>
-
-          {/* Menu Portal HANYA muncul sesuai role setelah user login */}
-          {authenticatedRole === 'worker' && (
-            <>
-              <button
-                type="button"
-                onClick={() => switchView('worker')}
-                className={`nav-link-animated font-semibold ${
-                  activeView === 'worker' ? 'active' : ''
-                }`}
-              >
-                Portal Pekerja
-              </button>
-              <button
-                type="button"
-                onClick={() => switchView('profile')}
-                className={`nav-link-animated ${
-                  activeView === 'profile' ? 'active' : ''
-                }`}
-              >
-                Profil Saya
-              </button>
-            </>
-          )}
-
-          {authenticatedRole === 'hrd' && (
-            <button
-              type="button"
-              onClick={() => switchView('hrd')}
-              className={`nav-link-animated font-semibold ${
-                activeView === 'hrd' ? 'active' : ''
-              }`}
-            >
-              Portal Instansi (HRD)
-            </button>
-          )}
-        </nav>
-
-        <div className="flex items-center gap-2.5">
-          {!authenticatedRole ? (
-            <>
-              <button
-                type="button"
-                onClick={() => switchView('login')}
-                className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
-              >
-                Masuk
-              </button>
-              <button
-                type="button"
-                onClick={() => openRoleRegister('worker')}
-                className="btn-pill-primary px-4 sm:px-5 py-2 text-xs sm:text-sm"
-              >
-                Daftar
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() =>
-                  switchView(authenticatedRole === 'worker' ? 'worker' : 'hrd')
-                }
-                className="btn-pill-primary px-4 py-2 text-xs sm:text-sm"
-              >
-                {authenticatedRole === 'worker'
-                  ? 'Buka Portal Pekerja'
-                  : 'Buka Portal Instansi'}
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="btn-pill-secondary px-3.5 py-2 text-xs sm:text-sm"
-              >
-                Keluar
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </header>
-  );
-
-  // ============================================================================
-  // 9A. RENDER VIEW 1: GET STARTED LANDING VIEW (VERSI GAYA D + ACRYLIC + SCROLL)
+  // 9A. RENDER VIEW 1: GET STARTED LANDING VIEW (TACTILE FROSTED GLASS + REDSUN CHOREOGRAPHY)
   // ============================================================================
   const renderLandingView = () => {
     const activeSteps =
       CARA_KERJA_STEPS[caraKerjaTab] || CARA_KERJA_STEPS.worker;
 
     return (
-      <main ref={landingRootRef} className="pt-20 pb-20 overflow-x-clip">
-        {/* 1. HERO + PILIH PERAN */}
+      <main ref={landingRootRef} className="pt-20 pb-20 overflow-x-clip view-transition-enter">
+        {/* 1. HERO + TACTILE FROSTED GLASS SHOWCASE */}
         <section
           ref={heroSectionRef}
-          className="hero-pastel-sky relative pt-10 pb-20 px-4 sm:px-8 overflow-hidden"
+          className="hero-pastel-sky relative pt-8 sm:pt-12 pb-24 px-4 sm:px-8 overflow-hidden"
         >
+          {/* High-Contrast Under-Glass Color Shapes so Frosted Blur Refracts Real Depth */}
           <div
             ref={cloudLayerSlowRef}
-            className="pointer-events-none absolute -top-10 left-[8%] w-72 h-32 rounded-full bg-white/55 blur-2xl"
+            className="pointer-events-none absolute top-12 left-[10%] w-[360px] h-[360px] rounded-full opacity-90"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(29, 111, 232, 0.42) 0%, rgba(37, 99, 235, 0.14) 52%, rgba(29, 111, 232, 0) 72%)',
+              filter: 'blur(26px)'
+            }}
           />
           <div
             ref={cloudLayerFastRef}
-            className="pointer-events-none absolute top-24 right-[10%] w-80 h-36 rounded-full bg-[#DCE8FD]/60 blur-2xl"
+            className="pointer-events-none absolute top-28 right-[8%] w-[380px] h-[380px] rounded-full opacity-90"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(251, 146, 60, 0.34) 0%, rgba(253, 224, 71, 0.20) 48%, rgba(255, 255, 255, 0) 74%)',
+              filter: 'blur(30px)'
+            }}
+          />
+          <div
+            className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 w-[680px] h-[260px] rounded-full opacity-85"
+            style={{
+              background:
+                'radial-gradient(ellipse, rgba(30, 64, 175, 0.36) 0%, rgba(59, 130, 246, 0.18) 54%, rgba(59, 130, 246, 0) 78%)',
+              filter: 'blur(28px)'
+            }}
           />
 
+          {/* Redsun-Inspired Luminous Horizon Dome Arch */}
+          <div ref={heroHorizonArchRef} className="redsun-horizon-arch" />
+
           <div className="max-w-6xl mx-auto relative z-10">
+            {/* Hero Headline & Segmented Frosted Switcher */}
             <div
               ref={heroHeadlineRef}
-              className="hero-scroll-layer text-center max-w-3xl mx-auto mb-12"
+              className="hero-scroll-layer text-center max-w-3xl mx-auto mb-10"
             >
-              <span
-                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-5 border"
+              <div className="hero-stagger-1">
+                <span
+                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-5 border shadow-sm"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.84)',
+                    backdropFilter: 'blur(16px)',
+                    borderColor: 'rgba(255, 255, 255, 0.96)',
+                    color: '#1555B8'
+                  }}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#1D6FE8]" />
+                  <span>Ekosistem Kerja Harian &amp; Proteksi Escrow H+2</span>
+                </span>
+              </div>
+
+              <h1
+                className="hero-stagger-2 heading-tight text-4xl sm:text-6xl leading-[1.07] mb-4"
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.72)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--primary)'
+                  color: '#0B1528',
+                  textShadow: '0 1px 0 rgba(255, 255, 255, 0.8)'
                 }}
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Platform Kerja Harian &amp; Escrow Payment Gateway</span>
-              </span>
-
-              <h1 className="heading-tight text-4xl sm:text-6xl leading-[1.08] mb-4">
                 Butuh cuan hari ini?{' '}
                 <span className="text-accent-primary">Cari di Harian.</span>
               </h1>
 
-              <p className="text-sm sm:text-lg max-w-xl mx-auto leading-relaxed mb-7">
-                Banyak kerjaan harian, satu klik lamar. Gaji aman, nggak perlu nunggu lama.
+              <p
+                className="hero-stagger-3 text-sm sm:text-lg max-w-xl mx-auto leading-relaxed mb-7 font-medium"
+                style={{ color: '#2B3B55' }}
+              >
+                Banyak kerjaan harian terverifikasi, satu klik lamar. Dana upah dikunci di Escrow dan cair maksimal H+2 tanpa cemas.
               </p>
 
-              <div className="flex flex-wrap items-center justify-center gap-3.5">
-                <button
-                  type="button"
-                  onClick={() => openRoleRegister('worker')}
-                  className="btn-pill-primary px-7 py-3.5 text-sm inline-flex items-center gap-2"
-                >
-                  <span>Cari Kerja</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openRoleRegister('hrd')}
-                  className="btn-pill-secondary px-7 py-3.5 text-sm inline-flex items-center gap-2"
-                >
-                  <span>Cari Pekerja</span>
-                  <Building2 className="w-4 h-4 text-accent-primary" />
-                </button>
+              {/* Segmented Frosted Pill Switcher (Like Basic | Standard | Premium in Reference) */}
+              <div className="hero-stagger-4 flex flex-col items-center gap-4">
+                <div className="frosted-segmented-bar" role="tablist" aria-label="Filter Peran Get Started">
+                  {[
+                    { id: 'all', label: 'Semua Peran' },
+                    { id: 'worker', label: 'Pekerja Harian' },
+                    { id: 'hrd', label: 'HRD & Instansi' }
+                  ].map((seg) => (
+                    <button
+                      key={seg.id}
+                      type="button"
+                      onClick={() => setHeroRoleSegment(seg.id)}
+                      className={`frosted-segmented-pill ${
+                        heroRoleSegment === seg.id ? 'is-active' : ''
+                      }`}
+                    >
+                      {seg.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* 2. DUA KARTU PILIH PERAN (AKRILIK) */}
+            {/* 2. TACTILE FROSTED GLASS SHOWCASE CONTAINER (ATLAS + PRICING CARD REFERENCE) */}
             <div
               ref={heroMockupRef}
-              className="hero-scroll-layer grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto"
+              className="hero-scroll-layer hero-stagger-5 harian-frosted-showcase harian-frosted-grain p-5 sm:p-8 max-w-5xl mx-auto"
             >
-              <div className="harian-surface-card p-7 sm:p-9 flex flex-col justify-between">
-                <div>
-                  <div className="w-12 h-12 rounded-2xl bg-white/80 border border-white flex items-center justify-center text-accent-primary mb-5 shadow-sm">
-                    <User className="w-6 h-6" />
+              {/* Decorative Color Silhouette Pill Under the Frosted Surface for Depth Refraction */}
+              <div
+                className="pointer-events-none absolute -top-16 left-1/4 w-64 h-64 rounded-full opacity-55"
+                style={{
+                  background:
+                    'radial-gradient(circle, rgba(37, 99, 235, 0.38) 0%, rgba(37, 99, 235, 0) 70%)',
+                  filter: 'blur(24px)'
+                }}
+              />
+              <div
+                className="pointer-events-none absolute -bottom-16 right-1/4 w-72 h-72 rounded-full opacity-60"
+                style={{
+                  background:
+                    'radial-gradient(circle, rgba(245, 158, 11, 0.28) 0%, rgba(245, 158, 11, 0) 70%)',
+                  filter: 'blur(26px)'
+                }}
+              />
+
+              {/* Top Atlas-Style Frosted Header Bar Inside the Glass Frame */}
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 pb-5 mb-6 border-b border-white/80">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-[#0F1B33] text-white flex items-center justify-center font-mono-metric text-xs font-bold shadow-sm">
+                    H/
                   </div>
-                  <span className="text-xs font-bold tracking-wider uppercase text-accent-primary">
-                    UNTUK PENCARI KERJA HARIAN
-                  </span>
-                  <h2 className="heading-tight text-2xl sm:text-3xl mt-1 mb-2">
-                    Cari Kerja
-                  </h2>
-                  <p className="text-sm sm:text-base leading-relaxed mb-6">
-                    &ldquo;Temukan kerjaan harian sesuai lokasi dan jam kamu.&rdquo;
-                  </p>
+                  <div>
+                    <div
+                      className="text-xs font-bold tracking-wider uppercase"
+                      style={{ color: '#0B1528' }}
+                    >
+                      GET STARTED &bull; PILIH AKSES PORTAL
+                    </div>
+                    <div className="text-[11px] font-medium" style={{ color: '#475569' }}>
+                      Transparansi penuh sejak pendaftaran hingga pencairan upah
+                    </div>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openRoleRegister('worker')}
-                  className="btn-pill-primary w-full py-3.5 text-sm inline-flex items-center justify-center gap-2"
-                >
-                  <span>Daftar sebagai Pekerja</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className="px-3 py-1 rounded-full text-[11px] font-mono-metric font-semibold border"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.85)',
+                      borderColor: 'rgba(255, 255, 255, 0.95)',
+                      color: '#0F1B33'
+                    }}
+                  >
+                    90% Upah Bersih &bull; 10% Service Fee
+                  </span>
+                </div>
               </div>
 
-              <div className="harian-surface-card p-7 sm:p-9 flex flex-col justify-between">
-                <div>
-                  <div className="w-12 h-12 rounded-2xl bg-white/80 border border-white flex items-center justify-center text-accent-primary mb-5 shadow-sm">
-                    <Building2 className="w-6 h-6" />
+              {/* Frosted Role Cards Grid (Adapts smoothly to Segmented Pill Switcher) */}
+              <div
+                key={heroRoleSegment}
+                className={`relative z-10 grid grid-cols-1 ${
+                  heroRoleSegment === 'all' ? 'md:grid-cols-2' : 'max-w-2xl mx-auto'
+                } gap-6`}
+              >
+                {(heroRoleSegment === 'all' || heroRoleSegment === 'worker') && (
+                  <div className="role-card-morph harian-role-frosted-card p-7 sm:p-8 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-5">
+                        <div className="w-12 h-12 rounded-2xl bg-white/95 border border-white flex items-center justify-center text-[#1D6FE8] shadow-md">
+                          <User className="w-6 h-6" />
+                        </div>
+                        <div className="text-right">
+                          <span
+                            className="inline-block text-[11px] font-mono-metric font-bold px-3 py-1 rounded-full border"
+                            style={{
+                              background: 'rgba(29, 111, 232, 0.10)',
+                              borderColor: 'rgba(29, 111, 232, 0.25)',
+                              color: '#1555B8'
+                            }}
+                          >
+                            Cair Maks H+2
+                          </span>
+                          <div
+                            className="text-xl sm:text-2xl font-bold font-mono-metric mt-1"
+                            style={{ color: '#0B1528' }}
+                          >
+                            Rp150rb–250rb
+                            <span className="text-xs font-normal" style={{ color: '#475569' }}>
+                              /shift
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className="text-[11px] font-bold tracking-widest uppercase text-[#1555B8]">
+                        UNTUK PENCARI KERJA HARIAN
+                      </span>
+                      <h2
+                        className="heading-tight text-2xl sm:text-3xl mt-1 mb-2"
+                        style={{ color: '#0B1528' }}
+                      >
+                        Cari Kerja
+                      </h2>
+                      <p
+                        className="text-sm leading-relaxed font-medium mb-5"
+                        style={{ color: '#2B3B55' }}
+                      >
+                        Temukan kerjaan harian sesuai lokasi dan jam shift kamu, langsung lamar tanpa grup chat yang menumpuk.
+                      </p>
+
+                      {/* Crisp High-Contrast Feature Checklist (Pricing Card Reference) */}
+                      <div className="space-y-2.5 pt-4 pb-6 border-t border-white/80 text-xs sm:text-sm font-medium">
+                        {[
+                          'Isi biodata & rekening pencairan langsung saat daftar',
+                          'Dana upah sudah dikunci di Escrow sebelum kamu mulai kerja',
+                          'Pantau status lamaran (Pending / Diterima) secara real-time'
+                        ].map((feat) => (
+                          <div
+                            key={feat}
+                            className="flex items-center gap-2.5"
+                            style={{ color: '#0F1B33' }}
+                          >
+                            <span className="w-5 h-5 rounded-full bg-[#1D6FE8]/15 text-[#1D6FE8] flex items-center justify-center shrink-0">
+                              <Check className="w-3.5 h-3.5 stroke-[2.6]" />
+                            </span>
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openRoleRegister('worker')}
+                      className="btn-pill-primary w-full py-3.5 px-6 text-sm inline-flex items-center justify-center gap-2"
+                    >
+                      <span>Get Started &bull; Daftar Pekerja</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
                   </div>
-                  <span className="text-xs font-bold tracking-wider uppercase text-accent-primary">
-                    UNTUK PERUSAHAAN / INSTANSI
-                  </span>
-                  <h2 className="heading-tight text-2xl sm:text-3xl mt-1 mb-2">
-                    Cari Pekerja
-                  </h2>
-                  <p className="text-sm sm:text-base leading-relaxed mb-6">
-                    &ldquo;Dapatkan pekerja harian tanpa ribet bolak-balik chat.&rdquo;
-                  </p>
+                )}
+
+                {(heroRoleSegment === 'all' || heroRoleSegment === 'hrd') && (
+                  <div className="role-card-morph harian-role-frosted-card p-7 sm:p-8 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-5">
+                        <div className="w-12 h-12 rounded-2xl bg-white/95 border border-white flex items-center justify-center text-[#0F1B33] shadow-md">
+                          <Building2 className="w-6 h-6" />
+                        </div>
+                        <div className="text-right">
+                          <span
+                            className="inline-block text-[11px] font-mono-metric font-bold px-3 py-1 rounded-full border"
+                            style={{
+                              background: 'rgba(15, 27, 51, 0.08)',
+                              borderColor: 'rgba(15, 27, 51, 0.18)',
+                              color: '#0F1B33'
+                            }}
+                          >
+                            Algoritma MFEP
+                          </span>
+                          <div
+                            className="text-xl sm:text-2xl font-bold font-mono-metric mt-1"
+                            style={{ color: '#0B1528' }}
+                          >
+                            Seleksi Instan
+                            <span className="text-xs font-normal" style={{ color: '#475569' }}>
+                              {' '}
+                              &bull; CSV
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className="text-[11px] font-bold tracking-widest uppercase text-[#1555B8]">
+                        UNTUK PERUSAHAAN / INSTANSI
+                      </span>
+                      <h2
+                        className="heading-tight text-2xl sm:text-3xl mt-1 mb-2"
+                        style={{ color: '#0B1528' }}
+                      >
+                        Cari Pekerja
+                      </h2>
+                      <p
+                        className="text-sm leading-relaxed font-medium mb-5"
+                        style={{ color: '#2B3B55' }}
+                      >
+                        Dapatkan tenaga kerja harian terverifikasi dengan pemeringkatan skor kelayakan otomatis tanpa ribet bolak-balik chat.
+                      </p>
+
+                      {/* Crisp High-Contrast Feature Checklist (Pricing Card Reference) */}
+                      <div className="space-y-2.5 pt-4 pb-6 border-t border-white/80 text-xs sm:text-sm font-medium">
+                        {[
+                          'Pemeringkatan kandidat objektif berbasis bobot MFEP',
+                          'Kunci anggaran upah aman lewat Escrow HarianPay',
+                          'Ekspor rekapitulasi laporan rekrutmen (CSV) dalam 1 klik'
+                        ].map((feat) => (
+                          <div
+                            key={feat}
+                            className="flex items-center gap-2.5"
+                            style={{ color: '#0F1B33' }}
+                          >
+                            <span className="w-5 h-5 rounded-full bg-[#0F1B33]/10 text-[#0F1B33] flex items-center justify-center shrink-0">
+                              <Check className="w-3.5 h-3.5 stroke-[2.6]" />
+                            </span>
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openRoleRegister('hrd')}
+                      className="btn-pill-navy w-full py-3.5 px-6 text-sm inline-flex items-center justify-center gap-2"
+                    >
+                      <span>Get Started &bull; Daftar Instansi</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Atlas-Style Frosted Bottom Metadata Bar */}
+              <div className="relative z-10 mt-6 pt-4 border-t border-white/75 flex flex-wrap items-center justify-between gap-3 text-xs font-medium" style={{ color: '#334155' }}>
+                <span>2026 &copy; HARIAN ESCROW &amp; MFEP WORKFORCE PLATFORM</span>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsServiceModal(true)}
+                    className="font-semibold text-[#1555B8] hover:underline"
+                  >
+                    Lihat PDF Syarat &amp; Ketentuan (Service Fee 10%) &rarr;
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openRoleRegister('hrd')}
-                  className="btn-pill-secondary w-full py-3.5 text-sm inline-flex items-center justify-center gap-2"
-                >
-                  <span>Daftar sebagai Instansi</span>
-                  <ArrowRight className="w-4 h-4 text-accent-primary" />
-                </button>
               </div>
             </div>
           </div>
