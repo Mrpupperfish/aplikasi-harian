@@ -509,6 +509,120 @@ const GlobalLightThemeStyles = () => (
       will-change: transform, opacity, filter;
     }
 
+    /* ==========================================================================
+       INITIAL WEBSITE OPEN ANIMATION (STAGGERED FROSTED ENTRANCE CHOREOGRAPHY)
+       ========================================================================== */
+    .initial-boot-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+       flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.94) 0%, rgba(232, 241, 255, 0.88) 60%, rgba(216, 232, 255, 0.92) 100%);
+      backdrop-filter: blur(36px) saturate(190%);
+      -webkit-backdrop-filter: blur(36px) saturate(190%);
+      animation: splashCurtainOut 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.52s forwards;
+      pointer-events: none;
+    }
+
+    .initial-boot-logo-pill {
+      padding: 18px 34px;
+      border-radius: 28px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(240, 247, 255, 0.72) 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.98);
+      box-shadow:
+        0 28px 68px -12px rgba(29, 111, 232, 0.22),
+        inset 0 2px 4px rgba(255, 255, 255, 1);
+      animation: splashLogoPop 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes splashLogoPop {
+      0% {
+        opacity: 0;
+        filter: blur(12px);
+        transform: translate3d(0, 18px, 0) scale(0.9);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
+    @keyframes splashCurtainOut {
+      0% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: scale(1);
+      }
+      100% {
+        opacity: 0;
+        filter: blur(14px);
+        transform: scale(1.035);
+        visibility: hidden;
+      }
+    }
+
+    .initial-nav-drop {
+      opacity: 0;
+      animation: initialNavSlideDown 0.78s cubic-bezier(0.16, 1, 0.3, 1) 0.32s forwards;
+      will-change: transform, opacity, filter;
+    }
+
+    @keyframes initialNavSlideDown {
+      0% {
+        opacity: 0;
+        filter: blur(8px);
+        transform: translate3d(0, -28px, 0);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    .initial-hero-item {
+      opacity: 0;
+      animation: initialHeroReveal 0.88s cubic-bezier(0.16, 1, 0.3, 1) var(--enter-delay, 0.38s) forwards;
+      will-change: transform, opacity, filter;
+    }
+
+    @keyframes initialHeroReveal {
+      0% {
+        opacity: 0;
+        filter: blur(14px);
+        transform: translate3d(0, 34px, 0) scale(0.955);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
+    .initial-role-card-enter {
+      opacity: 0;
+      animation: initialRoleCardRise 0.92s cubic-bezier(0.16, 1, 0.3, 1) var(--card-enter-delay, 0.62s) forwards;
+      will-change: transform, opacity, filter;
+    }
+
+    @keyframes initialRoleCardRise {
+      0% {
+        opacity: 0;
+        filter: blur(16px);
+        transform: translate3d(0, 52px, 0) scale(0.935);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, ::before, ::after {
         animation-duration: 0.01ms !important;
@@ -1007,7 +1121,16 @@ export default function App() {
   const [activeView, setActiveView] = useState('landing');
   const [authenticatedRole, setAuthenticatedRole] = useState(null); // null | 'worker' | 'hrd'
   const [isNavScrolled, setIsNavScrolled] = useState(false);
+  const [showInitialBootSplash, setShowInitialBootSplash] = useState(true);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Unmount initial boot splash overlay once its entrance curtain finishes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowInitialBootSplash(false);
+    }, 1220);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Landing Page (Versi Gaya D) Interactive States
   const [heroRoleSegment, setHeroRoleSegment] = useState('all'); // 'all' | 'worker' | 'hrd'
@@ -1590,7 +1713,7 @@ export default function App() {
   // ============================================================================
   const renderStickyNavbar = () => (
     <header
-      className={`sticky-glass-nav fixed top-0 left-0 right-0 z-40 px-4 sm:px-8 ${
+      className={`sticky-glass-nav initial-nav-drop fixed top-0 left-0 right-0 z-40 px-4 sm:px-8 ${
         isNavScrolled ? 'py-2.5' : 'py-3.5'
       }`}
     >
@@ -1739,29 +1862,34 @@ export default function App() {
 
           <div className="max-w-5xl mx-auto relative z-10 text-center">
             <div ref={heroHeadlineRef} className="hero-scroll-layer max-w-3xl mx-auto mb-12">
-              <span
-                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-5 border"
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                  borderColor: 'rgba(255, 255, 255, 0.96)',
-                  color: 'var(--primary)'
-                }}
+              <div
+                style={{ '--enter-delay': '0.38s' }}
+                className="initial-hero-item"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Platform Kerja Harian &amp; Escrow Payment Gateway</span>
-              </span>
+                <span
+                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-5 border"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                    borderColor: 'rgba(255, 255, 255, 0.96)',
+                    color: 'var(--primary)'
+                  }}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Platform Kerja Harian &amp; Escrow Payment Gateway</span>
+                </span>
+              </div>
 
               <h1
-                className="heading-tight text-4xl sm:text-6xl leading-[1.08] mb-4"
-                style={{ color: '#0B1528' }}
+                style={{ color: '#0B1528', '--enter-delay': '0.48s' }}
+                className="initial-hero-item heading-tight text-4xl sm:text-6xl leading-[1.08] mb-4"
               >
                 Butuh cuan hari ini?{' '}
                 <span className="text-accent-primary">Cari di Harian.</span>
               </h1>
 
               <p
-                className="text-sm sm:text-lg max-w-xl mx-auto leading-relaxed font-medium"
-                style={{ color: '#2B3B55' }}
+                style={{ color: '#2B3B55', '--enter-delay': '0.58s' }}
+                className="initial-hero-item text-sm sm:text-lg max-w-xl mx-auto leading-relaxed font-medium"
               >
                 Banyak kerjaan harian, satu klik lamar. Gaji jelas, cair maksimal H+2.
               </p>
@@ -1774,8 +1902,8 @@ export default function App() {
             >
               {/* Kotak 1: Cari Kerja */}
               <div
-                style={{ '--stagger-delay': '0ms' }}
-                className="scroll-reveal-card is-inview harian-role-frosted-card p-7 sm:p-9 flex flex-col justify-between"
+                style={{ '--card-enter-delay': '0.68s' }}
+                className="initial-role-card-enter harian-role-frosted-card p-7 sm:p-9 flex flex-col justify-between"
               >
                 <div>
                   <div className="w-12 h-12 rounded-2xl bg-white/95 border border-white flex items-center justify-center text-[#1D6FE8] mb-5 shadow-md">
@@ -1809,8 +1937,8 @@ export default function App() {
 
               {/* Kotak 2: Cari Pekerja */}
               <div
-                style={{ '--stagger-delay': '120ms' }}
-                className="scroll-reveal-card is-inview harian-role-frosted-card p-7 sm:p-9 flex flex-col justify-between"
+                style={{ '--card-enter-delay': '0.80s' }}
+                className="initial-role-card-enter harian-role-frosted-card p-7 sm:p-9 flex flex-col justify-between"
               >
                 <div>
                   <div className="w-12 h-12 rounded-2xl bg-white/95 border border-white flex items-center justify-center text-[#0F1B33] mb-5 shadow-md">
@@ -4502,6 +4630,19 @@ export default function App() {
     <div className="navos-ambient-canvas min-h-screen relative">
       <GlobalLightThemeStyles />
       <NavosSilkWaveBackdrop />
+
+      {/* INITIAL WEBSITE OPEN FROSTED REVEAL CURTAIN */}
+      {showInitialBootSplash && (
+        <div className="initial-boot-splash">
+          <div className="initial-boot-logo-pill flex flex-col items-center gap-2">
+            <HarianLogo size="md" />
+            <span className="text-[11px] font-mono-metric font-semibold tracking-widest uppercase text-[#1D6FE8]">
+              Daily Work &bull; Escrow H+2
+            </span>
+          </div>
+        </div>
+      )}
+
       {renderStickyNavbar()}
 
       <div className="relative z-10">
