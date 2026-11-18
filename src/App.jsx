@@ -1146,8 +1146,6 @@ export default function App() {
       const scrolled = y > 24;
       setIsNavScrolled((prev) => (prev !== scrolled ? scrolled : prev));
 
-      // Apply smooth GPU parallax on Landing Hero elements while scrolling down
-      if (heroHeadlineRef.current) {
       // Apply smooth GPU parallax on Landing Hero elements while scrolling down & up
       if (heroHeadlineRef.current) {
         const progress = Math.min(1, Math.max(0, y / 500));
@@ -1250,6 +1248,461 @@ export default function App() {
 
   // ============================================================================
   // 5. NAVIGATION, DERIVED DATA & ACTION HANDLERS
+  // ============================================================================
+  const switchView = (nextView) => {
+    setActiveView(nextView);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToLandingSection = (sectionId) => {
+    if (activeView !== 'landing') {
+      setActiveView('landing');
+      setTimeout(() => {
+        const el = document.getElementById(sectionId);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 90);
+    } else {
+      const el = document.getElementById(sectionId);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const openRoleRegister = (role) => {
+    setRegisterRole(role);
+    setRegisterEmail(
+      role === 'hrd' ? 'rekrutmen@karyamaju.co.id' : 'budi.santoso@gmail.com'
+    );
+    setAgreeServiceFee(false);
+    switchView('register');
+  };
+
+  // Filtered Jobs (UC-05)
+  const filteredJobs = useMemo(() => {
+    const kw = filterKeyword.trim().toLowerCase();
+    const minRateVal = Number(filterMinRate || 0);
+    return jobs.filter((job) => {
+      const matchKw =
+        !kw ||
+        job.title.toLowerCase().includes(kw) ||
+        job.company.toLowerCase().includes(kw);
+      const matchLoc =
+        filterLocation === 'ALL' ||
+        job.location.toLowerCase().includes(filterLocation.toLowerCase());
+      const matchCat =
+        filterCategory === 'ALL' || job.category === filterCategory;
+      const matchShift =
+        filterShift === 'ALL' || job.scheduleType === filterShift;
+      const matchRate = job.rate >= minRateVal;
+      return matchKw && matchLoc && matchCat && matchShift && matchRate;
+    });
+  }, [jobs, filterKeyword, filterLocation, filterCategory, filterShift, filterMinRate]);
+
+  const selectedJob = useMemo(() => {
+    return (
+      filteredJobs.find((j) => j.id === selectedJobId) ||
+      filteredJobs[0] ||
+      jobs[0]
+    );
+  }, [filteredJobs, jobs, selectedJobId]);
+
+  // MFEP Ranked Candidates (UC-08)
+  const rankedCandidates = useMemo(() => {
+    const totalWeight =
+      mfepWeights.exp +
+        mfepWeights.avail +
+        mfepWeights.dist +
+        mfepWeights.doc || 100;
+    const wExp = mfepWeights.exp / totalWeight;
+    const wAvail = mfepWeights.avail / totalWeight;
+    const wDist = mfepWeights.dist / totalWeight;
+    const wDoc = mfepWeights.doc / totalWeight;
+
+    return candidates
+      .map((c) => {
+        const weightedExp = (c.exp * wExp).toFixed(1);
+        const weightedAvail = (c.avail * wAvail).toFixed(1);
+        const weightedDist = (c.dist * wDist).toFixed(1);
+        const weightedDoc = (c.doc * wDoc).toFixed(1);
+        const mfepScore = (
+          (c.exp * wExp +
+            c.avail * wAvail +
+            c.dist * wDist +
+            c.doc * wDoc) /
+          100
+        ).toFixed(3);
+        return {
+          ...c,
+          weightedExp,
+          weightedAvail,
+          weightedDist,
+          weightedDoc,
+          mfepScore
+        };
+      })
+      .sort((a, b) => Number(b.mfepScore) - Number(a.mfepScore));
+  }, [candidates, mfepWeights]);
+
+  // Handlers
+  const handleRegisterSubmit = (e) => {
+    e.preventDefault();
+    if (!agreeServiceFee) {
+      triggerToast(
+        'Mohon centang persetujuan Syarat & Ketentuan serta Service Charge 10% terlebih dahulu.'
+      );
+      return;
+    }
+    if (registerPassword !== registerConfirmPassword) {
+      triggerToast('Konfirmasi kata sandi belum sesuai!');
+      return;
+    }
+    if (registerRole === 'worker') {
+      if (newExpRole.trim()) {
+        setWorkerProfile((prev) => ({
+          ...prev,
+          experiences: [
+            {
+              id: 'exp-' + Date.now(),
+              role: newExpRole.trim(),
+              company: 'Pengalaman Harian Terverifikasi',
+              period: '2025 - 2026'
+            },
+            ...prev.experiences
+          ]
+        }));
+      }
+      setFilterCategory(workerFavCategory);
+      setAuthenticatedRole('worker');
+      triggerToast(
+        `Pendaftaran berhasil! Selamat datang di Portal Pekerja, ${workerProfile.fullName}.`
+      );
+      switchView('worker');
+    } else {
+      setAuthenticatedRole('hrd');
+      triggerToast(
+        `Akun Instansi ${hrdProfile.companyName} aktif! Selamat datang di Portal Instansi.`
+      );
+      switchView('hrd');
+    }
+  };
+
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    if (loginPassword === 'salah123') {
+      setLoginError('Email atau Password salah, silahkan coba lagi.');
+      return;
+    }
+    setLoginError('');
+    if (loginRole === 'hrd') {
+      setAuthenticatedRole('hrd');
+      triggerToast('Berhasil masuk ke Portal Instansi (HRD).');
+      switchView('hrd');
+    } else {
+      setAuthenticatedRole('worker');
+      triggerToast(`Selamat datang kembali, ${workerProfile.fullName}!`);
+      switchView('worker');
+    }
+  };
+
+  const handleAddExperience = () => {
+    if (!newExpRole.trim()) {
+      triggerToast('Tuliskan posisi pengalaman kerja terlebih dahulu.');
+      return;
+    }
+    setWorkerProfile((prev) => ({
+      ...prev,
+      experiences: [
+        ...prev.experiences,
+        {
+          id: 'exp-' + Date.now(),
+          role: newExpRole.trim(),
+          company: newExpCompany.trim() || 'Mitra Harian',
+          period: '2025 - Sekarang'
+        }
+      ]
+    }));
+    setNewExpRole('');
+    setNewExpCompany('');
+    triggerToast('Pengalaman kerja baru berhasil ditambahkan.');
+  };
+
+  const handleApplyToJob = (job) => {
+    if (!job) return;
+    const exists = applications.some(
+      (a) => a.jobId === job.id && a.status !== 'Dibatalkan'
+    );
+    if (exists) {
+      triggerToast('Anda sudah melamar pada lowongan ini.');
+      return;
+    }
+    setApplications((prev) => [
+      {
+        id: 'app-' + Date.now(),
+        jobId: job.id,
+        jobTitle: job.title,
+        company: job.company,
+        rate: job.rate,
+        status: 'Pending',
+        appliedAt: 'Baru saja'
+      },
+      ...prev
+    ]);
+    setJobs((prev) =>
+      prev.map((j) =>
+        j.id === job.id
+          ? { ...j, applicantsCount: j.applicantsCount + 1 }
+          : j
+      )
+    );
+    triggerToast(
+      `Lamaran ke ${job.title} berhasil dikirim! Status: Pending.`
+    );
+  };
+
+  const handleCancelApplication = (appId) => {
+    setApplications((prev) =>
+      prev.map((a) =>
+        a.id === appId && a.status === 'Pending'
+          ? { ...a, status: 'Dibatalkan' }
+          : a
+      )
+    );
+    triggerToast('Lamaran berstatus Pending berhasil dibatalkan.');
+  };
+
+  const handleCandidateDecision = (candId, decision) => {
+    setCandidates((prev) =>
+      prev.map((c) => (c.id === candId ? { ...c, status: decision } : c))
+    );
+    const target = candidates.find((c) => c.id === candId);
+    if (target && target.name === 'Budi Santoso') {
+      setApplications((prev) =>
+        prev.map((a, idx) => (idx === 0 ? { ...a, status: decision } : a))
+      );
+    }
+    triggerToast(
+      `Status kandidat diperbarui menjadi "${decision}" secara real-time.`
+    );
+  };
+
+  const handleReleaseEscrowH2 = (jobId) => {
+    setJobs((prev) =>
+      prev.map((j) =>
+        j.id === jobId ? { ...j, escrowStage: 'PAID_H2' } : j
+      )
+    );
+    setApplications((prev) =>
+      prev.map((a) =>
+        a.jobId === jobId ? { ...a, status: 'Gaji Cair H+2' } : a
+      )
+    );
+    triggerToast(
+      'Pekerjaan ditandai selesai! Dana Escrow otomatis dicairkan ke rekening pekerja (H+2).'
+    );
+  };
+
+  const handleCreateJobSubmit = (e) => {
+    e.preventDefault();
+    const rateNum = Number(newJobForm.rate || 0);
+    const quotaNum = Number(newJobForm.quota || 0);
+    if (rateNum < 100000) {
+      setCreateJobError(
+        'Upah harian minimum adalah Rp 100.000 sesuai standar kelayakan Harian.'
+      );
+      return;
+    }
+    const escrowNeeded = rateNum * quotaNum;
+    if (escrowNeeded > hrdWalletBalance) {
+      setCreateJobError(
+        'Saldo HarianPay Korporat tidak mencukupi untuk mengunci dana Escrow.'
+      );
+      return;
+    }
+    const created = {
+      id: 'job-' + Date.now(),
+      title: newJobForm.title,
+      company: hrdProfile.companyName || 'PT Karya Maju',
+      location: newJobForm.location,
+      rate: rateNum,
+      workTime: newJobForm.workTime,
+      scheduleType: newJobForm.scheduleType || 'Morning Shift',
+      category: newJobForm.category || 'Logistics & Warehouse',
+      quota: quotaNum,
+      applicantsCount: 0,
+      integrityScore: '4.9 / 5.0 (Verified Partner)',
+      escrowHeld: escrowNeeded,
+      escrowStage: 'HELD',
+      matchScore: 96,
+      picName: newJobForm.picName,
+      picPhone: newJobForm.picPhone,
+      dresscode: newJobForm.dresscode,
+      description: newJobForm.description
+    };
+    setJobs((prev) => [created, ...prev]);
+    setHrdWalletBalance((prev) => prev - escrowNeeded);
+    setShowCreateJobModal(false);
+    triggerToast(
+      `Lowongan "${created.title}" berhasil tayang & dana Escrow ${formatRupiah(
+        escrowNeeded
+      )} dikunci!`
+    );
+  };
+
+  const handleDownloadCsv = () => {
+    const headers = ['Rank,Nama Kandidat,Posisi,Skor MFEP,Status\n'];
+    const rows = rankedCandidates.map(
+      (c, i) =>
+        `${i + 1},"${c.name}","${c.roleTarget}",${c.mfepScore},${c.status}`
+    );
+    const blob = new Blob([headers.concat(rows.join('\n'))], {
+      type: 'text/csv;charset=utf-8;'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Laporan_Rekrutmen_MFEP_Harian.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    triggerToast('Laporan Rekrutmen (CSV) berhasil diunduh.');
+  };
+
+  const handleDownloadTermsPdfFile = () => {
+    const content = [
+      'DOKUMEN RESMI SYARAT DAN KETENTUAN PLATFORM HARIAN (2026)',
+      '==========================================================',
+      'PASAL 1 - DEFINISI PLATFORM: Ekosistem kerja harian berbasis web.',
+      'PASAL 2 - JAMINAN ESCROW H+2: Dana upah dikunci 100% di awal oleh instansi dan cair maksimal H+2.',
+      'PASAL 3 - SERVICE CHARGE 10%: Potongan biaya layanan platform 10%, pekerja menerima bersih 90%.',
+      'PASAL 4 - SELEKSI MFEP: Evaluasi kandidat menggunakan Multi-Factor Evaluation Process.',
+      'PASAL 5 - PEMBATALAN: Lamaran berstatus Pending dapat dibatalkan kapan saja.'
+    ].join('\n\n');
+    const blob = new Blob([content], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Syarat_dan_Ketentuan_Harian_2026.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+    triggerToast('File Syarat_dan_Ketentuan_Harian_2026.pdf berhasil diunduh.');
+  };
+
+  // ============================================================================
+  // 8. STICKY MATTE FROSTED NAVBAR (PORTAL HANYA MUNCUL SETELAH LOGIN)
+  // ============================================================================
+  const renderStickyNavbar = () => (
+    <header
+      className={`sticky-glass-nav fixed top-0 left-0 right-0 z-40 px-4 sm:px-8 ${
+        isNavScrolled ? 'py-2.5' : 'py-3.5'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={() => switchView('landing')}
+          className="flex items-center gap-2 focus:outline-none"
+        >
+          <HarianLogo size="sm" />
+        </button>
+
+        <nav className="hidden md:flex items-center gap-6 text-xs sm:text-sm">
+          <button
+            type="button"
+            onClick={() => switchView('landing')}
+            className={`nav-link-animated ${
+              activeView === 'landing' ? 'active' : ''
+            }`}
+          >
+            Get Started
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToLandingSection('caraAksesSection')}
+            className="nav-link-animated"
+          >
+            Cara Akses
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToLandingSection('kenapaHarianSection')}
+            className="nav-link-animated"
+          >
+            Kenapa Harian?
+          </button>
+
+          {authenticatedRole === 'worker' && (
+            <button
+              type="button"
+              onClick={() => switchView('worker')}
+              className={`nav-link-animated font-semibold ${
+                activeView === 'worker' ? 'active' : ''
+              }`}
+            >
+              Portal Pekerja
+            </button>
+          )}
+
+          {authenticatedRole === 'hrd' && (
+            <button
+              type="button"
+              onClick={() => switchView('hrd')}
+              className={`nav-link-animated font-semibold ${
+                activeView === 'hrd' ? 'active' : ''
+              }`}
+            >
+              Portal Instansi
+            </button>
+          )}
+        </nav>
+
+        <div className="flex items-center gap-2.5">
+          {authenticatedRole ? (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  switchView(authenticatedRole === 'hrd' ? 'hrd' : 'worker')
+                }
+                className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
+              >
+                {authenticatedRole === 'hrd'
+                  ? 'Dasbor Instansi'
+                  : 'Portal Pekerja'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthenticatedRole(null);
+                  switchView('landing');
+                  triggerToast('Anda telah keluar dari sesi akun.');
+                }}
+                className="btn-pill-primary px-4 py-2 text-xs sm:text-sm"
+              >
+                Keluar
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => switchView('login')}
+                className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
+              >
+                Masuk
+              </button>
+              <button
+                type="button"
+                onClick={() => openRoleRegister('worker')}
+                className="btn-pill-primary px-4 sm:px-5 py-2 text-xs sm:text-sm inline-flex items-center gap-1.5"
+              >
+                <span>Daftar</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+
   // ============================================================================
   // 9A. RENDER VIEW 1: GET STARTED LANDING VIEW (DESAIN LAMA DIPERTAHANKAN + KOTAK FROSTED & TRANSISI SCROLL ATAS/BAWAH)
   // ============================================================================
