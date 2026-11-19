@@ -360,94 +360,94 @@ const GlobalLightThemeStyles = () => (
     .createui-stepper-card {
       background:
         radial-gradient(circle at 15% 12%, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 55%),
-        linear-gradient(
-          145deg,
-          rgba(255, 255, 255, 0.82) 0%,
-          rgba(244, 249, 255, 0.64) 52%,
-          rgba(234, 243, 255, 0.78) 100%
-        );
-      backdrop-filter: blur(46px) saturate(210%);
-      -webkit-backdrop-filter: blur(46px) saturate(210%);
-      border: 1.5px solid rgba(255, 255, 255, 0.94);
-      outline: 1px solid rgba(15, 27, 51, 0.06);
-      border-radius: 32px;
-      box-shadow:
-        0 32px 78px -14px rgba(15, 27, 51, 0.18),
-        0 10px 26px -6px rgba(29, 111, 232, 0.10),
-        inset 0 2px 3px rgba(255, 255, 255, 0.98),
-        inset 0 -1.5px 2px rgba(29, 111, 232, 0.08);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .createui-step-node {
-      width: 30px;
-      height: 30px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition:
-        background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-        border-radius 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.25s ease;
-      will-change: transform, background-color, border-radius;
-    }
-
-    .createui-step-node.is-completed {
-      background-color: #16A34A;
-      color: #FFFFFF;
-      border-radius: 9999px;
-      transform: scale(1);
-      box-shadow: 0 6px 16px rgba(22, 163, 74, 0.25);
-    }
-
-    .createui-step-node.is-active {
-      background-color: var(--primary);
-      color: #FFFFFF;
-      border-radius: 9px;
-      transform: scale(1.04);
-      box-shadow:
-        0 0 0 4px rgba(29, 111, 232, 0.16),
-        0 8px 18px rgba(29, 111, 232, 0.28);
-    }
-
-    .createui-step-node.is-upcoming {
-      background-color: rgba(216, 227, 246, 0.72);
-      color: #94A3B8;
-      border-radius: 9px;
-      border: 1px solid rgba(255, 255, 255, 0.85);
-      transform: scale(0.94);
-    }
-
-    .createui-connector-track {
-      width: 2px;
-      background-color: rgba(203, 218, 245, 0.65);
-      border-radius: 999px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .createui-connector-fill {
-      width: 100%;
-      border-radius: 999px;
-      transition: height 0.32s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.25s ease;
-    }
-
-    /* GPU-Only View Switch Transition */
-    .view-transition-enter {
-      animation: viewEnter 0.48s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      will-change: transform, opacity, filter;
-    }
-
-    @keyframes viewEnter {
-      from {
-        opacity: 0;
-        filter: blur(8px);
-        transform: translate3d(0, 20px, 0) scale(0.985);
+    /* Mobile Optimization: Fast GPU-Only Transitions & Zero Blur on Mobile */
+    @media (max-width: 768px) {
+      .navos-ambient-canvas {
+        background-attachment: scroll;
       }
-      to {
-        opacity: 1;
+
+      .harian-surface-card,
+      .harian-role-frosted-card,
+      .harian-blog-card,
+      .createui-stepper-card {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: linear-gradient(
+          155deg,
+          rgba(255, 255, 255, 0.96) 0%,
+          rgba(244, 249, 255, 0.94) 100%
+        );
+        border-radius: 22px;
+        box-shadow:
+      /* Keep subtle, lightweight frosted blur on mobile without heavy GPU lag */
+      .initial-boot-splash {
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        background: linear-gradient(180deg, rgba(232, 241, 255, 0.90) 0%, rgba(244, 248, 255, 0.92) 100%);
+        animation: splashCurtainOutMobile 0.30s cubic-bezier(0.22, 1, 0.36, 1) 0.22s forwards;
+      }
+
+      .initial-boot-logo-pill {
+        animation: splashLogoPopMobile 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+
+      @keyframes splashLogoPopMobile {
+        from { opacity: 0; filter: blur(4px); transform: translate3d(0, 10px, 0) scale(0.96); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0) scale(1); }
+      }
+
+      @keyframes splashCurtainOutMobile {
+        from { opacity: 1; filter: blur(0px); transform: scale(1); }
+        to { opacity: 0; filter: blur(6px); transform: scale(1.015); visibility: hidden; }
+      }
+
+      .initial-nav-drop {
+        animation: initialNavSlideDownMobile 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.14s forwards;
+      }
+
+      @keyframes initialNavSlideDownMobile {
+        from { opacity: 0; filter: blur(3px); transform: translate3d(0, -14px, 0); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0); }
+      }
+
+      .initial-hero-item,
+      .initial-role-card-enter {
+        animation: initialFastRiseMobile 0.38s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--enter-delay, var(--card-enter-delay, 0.2s)) * 0.42) forwards;
+      }
+
+      @keyframes initialFastRiseMobile {
+        from { opacity: 0; filter: blur(5px); transform: translate3d(0, 16px, 0) scale(0.985); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0) scale(1); }
+      }
+
+      .view-transition-enter {
+        animation: viewEnterMobile 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+
+      @keyframes viewEnterMobile {
+        from { opacity: 0; filter: blur(4px); transform: translate3d(0, 10px, 0); }
+        to { opacity: 1; filter: blur(0px); transform: translate3d(0, 0, 0); }
+      }
+
+      .scroll-reveal-section,
+      .scroll-reveal-card {
+        filter: blur(4px);
+        transform: translate3d(0, 22px, 0) scale(0.985);
+        transition:
+          opacity 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+          filter 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+          transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+        transition-delay: calc(var(--stagger-delay, 0ms) * 0.45);
+      }
+
+      .scroll-reveal-section.is-above,
+      .scroll-reveal-card.is-above {
+        filter: blur(3px);
+        transform: translate3d(0, -18px, 0) scale(0.985);
+      }
+
+      .scroll-reveal-section.is-inview,
+      .scroll-reveal-card.is-inview {
         filter: blur(0px);
         transform: translate3d(0, 0, 0) scale(1);
       }
