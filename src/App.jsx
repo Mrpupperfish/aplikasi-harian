@@ -623,6 +623,110 @@ const GlobalLightThemeStyles = () => (
       }
     }
 
+    /* Mobile Optimization: Fast GPU-Only Transitions & Lightweight Glass Blur */
+    @media (max-width: 768px) {
+      .navos-ambient-canvas {
+        background-attachment: scroll;
+      }
+
+      .harian-surface-card,
+      .harian-role-frosted-card,
+      .harian-blog-card,
+      .createui-stepper-card {
+        backdrop-filter: blur(12px) saturate(145%);
+        -webkit-backdrop-filter: blur(12px) saturate(145%);
+        background: linear-gradient(
+          155deg,
+          rgba(255, 255, 255, 0.90) 0%,
+          rgba(244, 249, 255, 0.82) 100%
+        );
+        border-radius: 22px;
+        box-shadow:
+          0 14px 32px -8px rgba(15, 27, 51, 0.12),
+          inset 0 1.5px 2px rgba(255, 255, 255, 0.95);
+        transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+      }
+
+      .sticky-glass-nav,
+      .navos-chat-bubble,
+      .frosted-input,
+      .btn-pill-secondary {
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+
+      /* Eliminate expensive filter: blur() keyframes & shorten duration on mobile */
+      .initial-boot-splash {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        animation: splashCurtainOutMobile 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.24s forwards;
+      }
+
+      .initial-boot-logo-pill {
+        animation: splashLogoPopMobile 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+
+      @keyframes splashLogoPopMobile {
+        from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.96); }
+        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+      }
+
+      @keyframes splashCurtainOutMobile {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0; transform: scale(1.015); visibility: hidden; }
+      }
+
+      .initial-nav-drop {
+        animation: initialNavSlideDownMobile 0.36s cubic-bezier(0.22, 1, 0.36, 1) 0.14s forwards;
+      }
+
+      @keyframes initialNavSlideDownMobile {
+        from { opacity: 0; transform: translate3d(0, -14px, 0); }
+        to { opacity: 1; transform: translate3d(0, 0, 0); }
+      }
+
+      .initial-hero-item,
+      .initial-role-card-enter {
+        animation: initialFastRiseMobile 0.42s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--enter-delay, var(--card-enter-delay, 0.24s)) * 0.45) forwards;
+      }
+
+      @keyframes initialFastRiseMobile {
+        from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.98); }
+        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+      }
+
+      .view-transition-enter {
+        animation: viewEnterMobile 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+
+      @keyframes viewEnterMobile {
+        from { opacity: 0; transform: translate3d(0, 10px, 0); }
+        to { opacity: 1; transform: translate3d(0, 0, 0); }
+      }
+
+      .scroll-reveal-section,
+      .scroll-reveal-card {
+        filter: none !important;
+        transform: translate3d(0, 22px, 0) scale(0.985);
+        transition:
+          opacity 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+          transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+        transition-delay: calc(var(--stagger-delay, 0ms) * 0.45);
+      }
+
+      .scroll-reveal-section.is-above,
+      .scroll-reveal-card.is-above {
+        filter: none !important;
+        transform: translate3d(0, -18px, 0) scale(0.985);
+      }
+
+      .scroll-reveal-section.is-inview,
+      .scroll-reveal-card.is-inview {
+        filter: none !important;
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, ::before, ::after {
         animation-duration: 0.01ms !important;
@@ -1126,9 +1230,10 @@ export default function App() {
 
   // Unmount initial boot splash overlay once its entrance curtain finishes
   useEffect(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
     const timer = setTimeout(() => {
       setShowInitialBootSplash(false);
-    }, 1220);
+    }, isMobile ? 580 : 1220);
     return () => clearTimeout(timer);
   }, []);
 
@@ -1269,45 +1374,65 @@ export default function App() {
       const scrolled = y > 24;
       setIsNavScrolled((prev) => (prev !== scrolled ? scrolled : prev));
 
-      // Apply smooth GPU parallax on Landing Hero elements while scrolling down & up
+      const isMobileViewport = window.innerWidth <= 768;
+
+      // Apply smooth GPU parallax on Landing Hero elements (skip expensive per-frame blur on mobile)
       if (heroHeadlineRef.current) {
-        const progress = Math.min(1, Math.max(0, y / 500));
-        const translateY = -y * 0.16;
-        const scale = 1 - progress * 0.065;
-        const blurPx = progress * 6;
-        const opacity = Math.max(0.08, 1 - progress * 0.88);
-        heroHeadlineRef.current.style.transform = `translate3d(0, ${translateY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
-        heroHeadlineRef.current.style.opacity = opacity.toFixed(3);
-        heroHeadlineRef.current.style.filter = `blur(${blurPx.toFixed(1)}px)`;
+        if (isMobileViewport) {
+          const progress = Math.min(1, Math.max(0, y / 420));
+          heroHeadlineRef.current.style.transform = `translate3d(0, ${(-y * 0.08).toFixed(1)}px, 0)`;
+          heroHeadlineRef.current.style.opacity = Math.max(0.2, 1 - progress * 0.75).toFixed(3);
+          heroHeadlineRef.current.style.filter = 'none';
+        } else {
+          const progress = Math.min(1, Math.max(0, y / 500));
+          const translateY = -y * 0.16;
+          const scale = 1 - progress * 0.065;
+          const blurPx = progress * 6;
+          const opacity = Math.max(0.08, 1 - progress * 0.88);
+          heroHeadlineRef.current.style.transform = `translate3d(0, ${translateY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+          heroHeadlineRef.current.style.opacity = opacity.toFixed(3);
+          heroHeadlineRef.current.style.filter = `blur(${blurPx.toFixed(1)}px)`;
+        }
       }
 
       if (heroMockupRef.current) {
-        const progress = Math.min(1, Math.max(0, y / 560));
-        const liftY = -progress * 28;
-        const scale = 1 - progress * 0.035;
-        const blurPx = progress * 4;
-        const opacity = Math.max(0.18, 1 - progress * 0.72);
-        heroMockupRef.current.style.transform = `translate3d(0, ${liftY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
-        heroMockupRef.current.style.opacity = opacity.toFixed(3);
-        heroMockupRef.current.style.filter = `blur(${blurPx.toFixed(1)}px)`;
+        if (isMobileViewport) {
+          heroMockupRef.current.style.transform = 'translate3d(0, 0, 0)';
+          heroMockupRef.current.style.opacity = '1';
+          heroMockupRef.current.style.filter = 'none';
+        } else {
+          const progress = Math.min(1, Math.max(0, y / 560));
+          const liftY = -progress * 28;
+          const scale = 1 - progress * 0.035;
+          const blurPx = progress * 4;
+          const opacity = Math.max(0.18, 1 - progress * 0.72);
+          heroMockupRef.current.style.transform = `translate3d(0, ${liftY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+          heroMockupRef.current.style.opacity = opacity.toFixed(3);
+          heroMockupRef.current.style.filter = `blur(${blurPx.toFixed(1)}px)`;
+        }
       }
 
-      if (cloudLayerSlowRef.current) {
+      if (cloudLayerSlowRef.current && !isMobileViewport) {
         cloudLayerSlowRef.current.style.transform = `translate3d(0, ${(y * 0.14).toFixed(1)}px, 0)`;
       }
 
-      if (cloudLayerFastRef.current) {
+      if (cloudLayerFastRef.current && !isMobileViewport) {
         cloudLayerFastRef.current.style.transform = `translate3d(0, ${(y * -0.10).toFixed(1)}px, 0)`;
       }
 
       if (footerPeekMockupRef.current && footerSectionRef.current) {
-        const rect = footerSectionRef.current.getBoundingClientRect();
-        const vh = window.innerHeight || 800;
-        const enterRatio = Math.min(1, Math.max(0, (vh - rect.top) / (vh * 0.75)));
-        const peekY = (1 - enterRatio) * 42;
-        const peekScale = 0.95 + enterRatio * 0.05;
-        footerPeekMockupRef.current.style.transform = `translate3d(0, ${peekY.toFixed(1)}px, 0) scale(${peekScale.toFixed(3)})`;
-        footerPeekMockupRef.current.style.opacity = (0.35 + enterRatio * 0.65).toFixed(3);
+        if (isMobileViewport) {
+          footerPeekMockupRef.current.style.transform = 'translate3d(0, 0, 0)';
+          footerPeekMockupRef.current.style.opacity = '1';
+        } else {
+          const rect = footerSectionRef.current.getBoundingClientRect();
+          const vh = window.innerHeight || 800;
+          const enterRatio = Math.min(1, Math.max(0, (vh - rect.top) / (vh * 0.75)));
+          const peekY = (1 - enterRatio) * 42;
+          const peekScale = 0.95 + enterRatio * 0.05;
+          footerPeekMockupRef.current.style.transform = `translate3d(0, ${peekY.toFixed(1)}px, 0) scale(${peekScale.toFixed(3)})`;
+          footerPeekMockupRef.current.style.opacity = (0.35 + enterRatio * 0.65).toFixed(3);
+        }
       }
 
       rafId = null;
