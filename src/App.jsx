@@ -4196,18 +4196,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2.5 mb-4">
-                        <div
-                          className="p-3 rounded-2xl border"
-                          style={{
-                            backgroundColor: 'var(--bg-soft)',
-                            borderColor: 'var(--border)'
-                          }}
-                        >
-                          <div className="text-[10px]">Jadwal Shift</div>
-                          <div
-                            className="text-xs sm:text-sm font-semibold font-mono-metric mt-0.5"
-                            style={{ color: 'var(--text)' }}
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div
                           className="p-3 rounded-2xl border"
