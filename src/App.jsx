@@ -2818,6 +2818,17 @@ export default function App() {
     triggerToast('Lamaran berstatus Pending berhasil dibatalkan.');
   };
 
+  const isApplicationLinkedToCandidate = (application, candidate) => {
+    if (candidate.applicationId) {
+      return application.id === candidate.applicationId;
+    }
+    return (
+      candidate.name === workerProfile.fullName &&
+      (application.jobId === candidate.jobId ||
+        application.jobTitle === candidate.roleTarget)
+    );
+  };
+
   const handleCandidateDecision = (candId, decision) => {
     const target = candidates.find((c) => c.id === candId);
     setCandidates((prev) =>
@@ -2826,13 +2837,7 @@ export default function App() {
     if (target) {
       setApplications((prev) =>
         prev.map((a) => {
-          if (target.applicationId && a.id === target.applicationId) {
-            return { ...a, status: decision };
-          }
-          if (
-            target.name === workerProfile.fullName &&
-            (a.jobId === target.jobId || a.jobTitle === target.roleTarget)
-          ) {
+          if (isApplicationLinkedToCandidate(a, target)) {
             return { ...a, status: decision };
           }
           return a;
@@ -3426,29 +3431,52 @@ export default function App() {
         `Data pelamar "${cleanedCandidate.name}" berhasil ditambahkan ke database.`
       );
     } else {
+      const originalCandidate =
+        candidates.find((c) => c.id === cleanedCandidate.id) || cleanedCandidate;
+      const applicationJob =
+        matchedJob || jobs.find((j) => j.id === cleanedCandidate.jobId);
+
       setCandidates((prev) =>
         prev.map((c) => (c.id === cleanedCandidate.id ? cleanedCandidate : c))
       );
       setApplications((prev) =>
         prev.map((a) => {
-          if (
-            (cleanedCandidate.applicationId &&
-              a.id === cleanedCandidate.applicationId) ||
-            (cleanedCandidate.name === workerProfile.fullName &&
-              a.jobTitle === cleanedCandidate.roleTarget)
-          ) {
+          if (isApplicationLinkedToCandidate(a, originalCandidate)) {
             return {
               ...a,
+              jobId: cleanedCandidate.jobId,
+              jobTitle: applicationJob?.title || cleanedCandidate.roleTarget,
+              company: applicationJob?.company || a.company,
+              rate: applicationJob?.rate ?? a.rate,
               status: cleanedCandidate.status,
-              documents:
-                cleanedCandidate.documents.length > 0
-                  ? cleanedCandidate.documents
-                  : a.documents
+              documents: cleanedCandidate.documents
             };
           }
           return a;
         })
       );
+      if (originalCandidate.jobId !== cleanedCandidate.jobId) {
+        setJobs((prev) =>
+          prev.map((j) => {
+            if (j.id === originalCandidate.jobId) {
+              return {
+                ...j,
+                applicantsCount: Math.max(
+                  0,
+                  Number(j.applicantsCount || 0) - 1
+                )
+              };
+            }
+            if (j.id === cleanedCandidate.jobId) {
+              return {
+                ...j,
+                applicantsCount: Number(j.applicantsCount || 0) + 1
+              };
+            }
+            return j;
+          })
+        );
+      }
       setApplicantCrudModal(null);
       triggerToast(
         `Perubahan data pelamar "${cleanedCandidate.name}" berhasil disimpan di database.`
@@ -3460,6 +3488,22 @@ export default function App() {
     if (!confirmDeleteApplicant) return;
     const target = confirmDeleteApplicant;
     setCandidates((prev) => prev.filter((c) => c.id !== target.id));
+    setApplications((prev) =>
+      prev.filter((application) => !isApplicationLinkedToCandidate(application, target))
+    );
+    setJobs((prev) =>
+      prev.map((job) =>
+        job.id === target.jobId
+          ? {
+              ...job,
+              applicantsCount: Math.max(
+                0,
+                Number(job.applicantsCount || 0) - 1
+              )
+            }
+          : job
+      )
+    );
     setConfirmDeleteApplicant(null);
     triggerToast(
       `Data pelamar "${target.name}" berhasil dihapus secara konsisten dari database.`
