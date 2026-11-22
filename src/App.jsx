@@ -1128,6 +1128,7 @@ const NativeModalDialog = ({
   labelledBy,
   allowOutsideClose = true,
   maxWidthClass = 'max-w-xl',
+  dialogClassName = '',
   children
 }) => {
   const dialogRef = useRef(null);
@@ -1183,7 +1184,7 @@ const NativeModalDialog = ({
         }
         pressedOutsideRef.current = false;
       }}
-      className={`harian-native-dialog ${maxWidthClass}`}
+      className={`harian-native-dialog ${maxWidthClass} ${dialogClassName}`}
     >
       <div className="harian-surface-card w-full p-6 sm:p-7 max-h-[88vh] overflow-y-auto text-left">
         {children}
@@ -1705,7 +1706,8 @@ const loadPersistedSprint3Db = () => {
       applications: INITIAL_APPLICATIONS,
       candidates: INITIAL_CANDIDATES,
       hrdWalletBalance: 25000000,
-      paymentTransactions: INITIAL_TRANSACTIONS
+      paymentTransactions: INITIAL_TRANSACTIONS,
+      workerNotifications: []
     };
   }
   try {
@@ -1735,7 +1737,10 @@ const loadPersistedSprint3Db = () => {
         typeof parsed.hrdWalletBalance === 'number' ? parsed.hrdWalletBalance : 25000000,
       paymentTransactions: Array.isArray(parsed.paymentTransactions)
         ? parsed.paymentTransactions
-        : INITIAL_TRANSACTIONS
+        : INITIAL_TRANSACTIONS,
+      workerNotifications: Array.isArray(parsed.workerNotifications)
+        ? parsed.workerNotifications
+        : []
     };
   } catch {
     return {
@@ -1745,7 +1750,8 @@ const loadPersistedSprint3Db = () => {
       applications: INITIAL_APPLICATIONS,
       candidates: INITIAL_CANDIDATES,
       hrdWalletBalance: 25000000,
-      paymentTransactions: INITIAL_TRANSACTIONS
+      paymentTransactions: INITIAL_TRANSACTIONS,
+      workerNotifications: []
     };
   }
 };
@@ -1996,6 +2002,9 @@ export default function App() {
   const [paymentTransactions, setPaymentTransactions] = useState(
     initialDb.paymentTransactions
   );
+  const [workerNotifications, setWorkerNotifications] = useState(
+    initialDb.workerNotifications
+  );
 
   // US-08: Edit, Close, Delete Job States
   const [hrdJobStatusFilter, setHrdJobStatusFilter] = useState('ALL');
@@ -2105,7 +2114,8 @@ export default function App() {
         documents: compactDocs(c.documents)
       })),
       hrdWalletBalance,
-      paymentTransactions
+      paymentTransactions,
+      workerNotifications
     };
 
     try {
@@ -2138,7 +2148,8 @@ export default function App() {
     applications,
     candidates,
     hrdWalletBalance,
-    paymentTransactions
+    paymentTransactions,
+    workerNotifications
   ]);
 
   // Scroll & Animation Refs
@@ -2370,6 +2381,7 @@ export default function App() {
     setCandidates(INITIAL_CANDIDATES);
     setHrdWalletBalance(25000000);
     setPaymentTransactions(INITIAL_TRANSACTIONS);
+    setWorkerNotifications([]);
     setHrdJobStatusFilter('ALL');
     setApplicantSearchQuery('');
     setApplicantRoleFilter('ALL');
@@ -2491,17 +2503,27 @@ export default function App() {
     });
   }, [rankedCandidates, applicantSearchQuery, applicantRoleFilter, applicantStatusFilter]);
 
-  const recordTransaction = (type, title, method, amount, status = 'Lunas') => {
+  const recordTransaction = (
+    type,
+    title,
+    method,
+    amount,
+    status = 'Lunas',
+    invoiceId = null,
+    lineItem = null
+  ) => {
     const tx = {
       id: 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
       invoiceId:
+        invoiceId ||
         'INV-HPY-2026-' + String(Math.floor(1000 + Math.random() * 9000)),
       type,
       title,
       method,
       amount: Number(amount || 0),
       status,
-      createdAt: nowTimeLabel()
+      createdAt: nowTimeLabel(),
+      lineItem
     };
     setPaymentTransactions((prev) => [tx, ...prev]);
     return tx;
@@ -2891,16 +2913,51 @@ export default function App() {
             : j
         )
       );
-      recordTransaction(
+      const transaction = recordTransaction(
         'ESCROW_LOCK',
         `Tagihan Lowongan Lunas: ${targetJob.title} (${targetJob.quota} Kuota × ${formatRupiah(
           targetJob.rate
         )})`,
         paymentModal.method,
         payAmount,
-        'Lunas'
+        'Lunas',
+        paymentModal.invoiceId,
+        {
+          description: `Upah harian — ${targetJob.title}`,
+          quantity: Number(targetJob.quota || 1),
+          unitPrice: Number(targetJob.rate || payAmount),
+          amount: payAmount
+        }
       );
+      const eligibleWorkers = candidates.filter(
+        (candidate) =>
+          candidate.applicationId &&
+          (candidate.jobId === targetJob.id ||
+            candidate.roleTarget === targetJob.title) &&
+          candidate.status === 'Diterima' &&
+          applications.some(
+            (application) =>
+              application.id === candidate.applicationId &&
+              application.jobId === targetJob.id &&
+              application.status === 'Diterima'
+          )
+      );
+      if (eligibleWorkers.length > 0) {
+        setWorkerNotifications((prev) => [
+          ...eligibleWorkers.map((worker) => ({
+            id: `notif-${transaction.id}-${worker.id}`,
+            workerId: worker.id,
+            workerName: worker.name,
+            jobId: targetJob.id,
+            jobTitle: targetJob.title,
+            createdAt: transaction.createdAt,
+            message: `Dana upah untuk "${targetJob.title}" telah diamankan oleh ${targetJob.company} di escrow HarianPay. Pencairan menunggu pekerjaan selesai dan diverifikasi. Ini belum merupakan pembayaran ke rekening Anda.`
+          })),
+          ...prev
+        ]);
+      }
       setPaymentModal(null);
+      setReceiptPreviewTx(transaction);
       triggerToast(
         `Verifikasi Gateway Sukses! Status tagihan "${targetJob.title}" kini Lunas dan dana pekerjaan telah diamankan.`
       );
@@ -2909,12 +2966,13 @@ export default function App() {
 
     if (paymentModal.purpose === 'JOB_ESCROW' && paymentModal.pendingJobPayload) {
       const jobPayload = paymentModal.pendingJobPayload;
-      recordTransaction(
+      const gatewayTransaction = recordTransaction(
         'TOP_UP',
         `Pembayaran Gateway (${paymentModal.invoiceId}) untuk Escrow Lowongan`,
         paymentModal.method,
         payAmount,
-        'Lunas'
+        'Lunas',
+        paymentModal.invoiceId
       );
       const escrowNeeded = Number(jobPayload.rate) * Number(jobPayload.quota);
       const nextBalance = hrdWalletBalance + payAmount - escrowNeeded;
@@ -2935,6 +2993,7 @@ export default function App() {
         'Lunas'
       );
       setPaymentModal(null);
+      setReceiptPreviewTx(gatewayTransaction);
       setShowCreateJobModal(false);
       triggerToast(
         `Verifikasi Gateway Sukses! Pembayaran Lunas & lowongan "${created.title}" resmi tayang di pencarian pelamar.`
@@ -2943,14 +3002,16 @@ export default function App() {
     }
 
     setHrdWalletBalance((prev) => prev + payAmount);
-    recordTransaction(
+    const transaction = recordTransaction(
       'TOP_UP',
       `Top-Up Saldo Escrow Korporat (${paymentModal.invoiceId})`,
       paymentModal.method,
       payAmount,
-      'Lunas'
+      'Lunas',
+      paymentModal.invoiceId
     );
     setPaymentModal(null);
+    setReceiptPreviewTx(transaction);
     triggerToast(
       `Verifikasi Gateway Sukses! Pembayaran ${formatRupiah(
         payAmount
@@ -2977,7 +3038,14 @@ export default function App() {
         `Pembayaran Gagal/Expired: ${targetJob.title} (${targetJob.quota} Kuota)`,
         paymentModal.method,
         payAmount,
-        'Batal/Gagal'
+        'Batal/Gagal',
+        paymentModal.invoiceId,
+        {
+          description: `Upah harian — ${targetJob.title}`,
+          quantity: Number(targetJob.quota || 1),
+          unitPrice: Number(targetJob.rate || payAmount),
+          amount: payAmount
+        }
       );
       setPaymentModal(null);
       triggerToast(
@@ -2991,7 +3059,8 @@ export default function App() {
       `Pembayaran Gateway Gagal/Expired (${paymentModal.invoiceId})`,
       paymentModal.method,
       payAmount,
-      'Batal/Gagal'
+      'Batal/Gagal',
+      paymentModal.invoiceId
     );
     setPaymentModalError(
       'Respon Payment Gateway: Gagal / Expired. Status transaksi diubah menjadi Batal/Gagal — silakan ulangi pembayaran.'
@@ -5708,6 +5777,9 @@ export default function App() {
       ? jobs.find((j) => j.id === jobDetailModalId && j.status !== 'CLOSED') ||
         null
       : null;
+    const visibleWorkerNotifications = workerNotifications.filter(
+      (notification) => notification.workerName === workerProfile.fullName
+    );
     const alreadyAppliedModal = modalJob
       ? applications.some(
           (a) => a.jobId === modalJob.id && a.status !== 'Dibatalkan'
@@ -5784,6 +5856,33 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          {visibleWorkerNotifications.length > 0 && (
+            <section
+              aria-label="Notifikasi pembayaran"
+              className="space-y-3 mb-6"
+            >
+              {visibleWorkerNotifications.slice(0, 3).map((notification) => (
+                <article
+                  key={notification.id}
+                  role="status"
+                  className="harian-surface-card p-5 border-l-4 border-emerald-500"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <h3 className="text-sm font-bold text-emerald-800">
+                      Dana upah diamankan di escrow
+                    </h3>
+                    <span className="text-[11px] text-[#526382]">
+                      {notification.createdAt}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed">
+                    {notification.message}
+                  </p>
+                </article>
+              ))}
+            </section>
+          )}
 
           {workerSubTab === 'explore' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -6553,12 +6652,18 @@ export default function App() {
                         : 'HarianPay'
                   }
                 ].map((tab) => {
-                  const active = hrdSubTab === tab.id;
+                  const active =
+                    tab.id === 'escrow'
+                      ? hrdSubTab === 'escrow' || hrdSubTab === 'receipts'
+                      : hrdSubTab === tab.id;
                   return (
                     <button
                       key={tab.id}
                       type="button"
                       onClick={() => setHrdSubTab(tab.id)}
+                      aria-expanded={
+                        tab.id === 'escrow' ? active : undefined
+                      }
                       className="w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-between"
                       style={{
                         backgroundColor: active
@@ -6582,6 +6687,30 @@ export default function App() {
                     </button>
                   );
                 })}
+                {(hrdSubTab === 'escrow' || hrdSubTab === 'receipts') && (
+                  <div className="ml-4 pl-3 border-l border-[#CBDDFC]">
+                    <button
+                      type="button"
+                      onClick={() => setHrdSubTab('receipts')}
+                      aria-current={
+                        hrdSubTab === 'receipts' ? 'page' : undefined
+                      }
+                      className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition"
+                      style={{
+                        backgroundColor:
+                          hrdSubTab === 'receipts'
+                            ? 'var(--primary-light)'
+                            : 'transparent',
+                        color:
+                          hrdSubTab === 'receipts'
+                            ? 'var(--primary)'
+                            : 'var(--text)'
+                      }}
+                    >
+                      Nota
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -7142,8 +7271,10 @@ export default function App() {
             )}
 
             {/* TAB 4: TAGIHAN PEMBAYARAN & VERIFIKASI PAYMENT GATEWAY (US-17 & US-18) */}
-            {hrdSubTab === 'escrow' && (
+            {(hrdSubTab === 'escrow' || hrdSubTab === 'receipts') && (
               <div className="space-y-6">
+                {hrdSubTab === 'escrow' && (
+                  <>
                 <div className="harian-surface-card p-6 sm:p-8">
                   <div
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-6 border-b"
@@ -7226,6 +7357,10 @@ export default function App() {
                     </div>
                   </div>
 
+                </div>
+
+                <div>
+                  <div className="harian-surface-card p-6 sm:p-8">
                   {/* Job Billing & Payment Verification List (US-17 & US-18) */}
                   <div className="mb-3">
                     <h3 className="text-sm font-bold">
@@ -7333,21 +7468,24 @@ export default function App() {
                     })}
                   </div>
                 </div>
+                </div>
+                  </>
+                )}
 
-                {/* Payment Processor Transaction Ledger */}
-                <div className="harian-surface-card p-6 sm:p-8">
+                {hrdSubTab === 'receipts' && (
+                  <div className="harian-surface-card p-6 sm:p-8">
                   <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#DCE8FD]">
                     <div>
                       <h3 className="heading-tight text-lg">
-                        Riwayat Mutasi &amp; Verifikasi Payment Gateway
+                        Nota &amp; Riwayat Transaksi
                       </h3>
                       <p className="text-xs">
-                        Seluruh transaksi Payment Gateway (Top-Up, Tagihan Lunas, Batal/Gagal, dan Refund) tercatat otomatis.
+                        Nota tersedia untuk pembayaran, top-up, refund, dan transaksi lainnya.
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
                     {paymentTransactions.map((tx) => (
                       <div
                         key={tx.id}
@@ -7423,7 +7561,8 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -7431,6 +7570,78 @@ export default function App() {
       </section>
     );
   };
+
+  const receiptIsRefund = receiptPreviewTx?.type === 'ESCROW_REFUND';
+  const receiptIsFailed = receiptPreviewTx?.status === 'Batal/Gagal';
+  const receiptHeading = receiptIsRefund
+    ? 'Bukti Pengembalian Dana'
+    : receiptIsFailed
+    ? 'Bukti Transaksi'
+    : 'Bukti Pembayaran';
+  const receiptStatusLabel =
+    receiptPreviewTx?.type === 'ESCROW_LOCK' &&
+    receiptPreviewTx.status === 'Lunas'
+      ? 'Lunas • Dana diamankan di escrow'
+      : receiptPreviewTx?.status;
+  const receiptStampLabel = receiptIsRefund
+    ? 'Dikembalikan'
+    : receiptIsFailed
+    ? 'Gagal'
+    : 'Lunas';
+  const receiptAmountLabel = receiptIsRefund
+    ? 'Jumlah dikembalikan'
+    : receiptIsFailed
+    ? 'Nilai tagihan'
+    : 'Jumlah dibayarkan';
+  const receiptItemNote =
+    receiptPreviewTx?.type === 'ESCROW_LOCK'
+      ? 'Dana pekerjaan diamankan sementara di escrow HarianPay.'
+      : receiptPreviewTx?.type === 'ESCROW_REFUND'
+      ? 'Dana dikembalikan ke saldo korporat.'
+      : receiptPreviewTx?.type === 'PAYMENT_FAILED'
+      ? 'Transaksi tidak berhasil diproses.'
+      : 'Transaksi diproses melalui HarianPay.';
+  const receiptItemDescription =
+    receiptPreviewTx?.lineItem?.description || receiptPreviewTx?.title;
+  const receiptItemQuantity = receiptPreviewTx?.lineItem?.quantity || 1;
+  const receiptItemUnitPrice =
+    receiptPreviewTx?.lineItem?.unitPrice ?? receiptPreviewTx?.amount ?? 0;
+  const receiptItemDetail = receiptPreviewTx?.lineItem
+    ? `${receiptItemQuantity} pekerja × ${formatRupiah(
+        receiptItemUnitPrice
+      )} per hari. ${receiptItemNote}`
+    : receiptItemNote;
+  const receiptTotals = receiptPreviewTx
+    ? [
+        {
+          label: receiptIsRefund ? 'Jumlah transaksi' : 'Subtotal',
+          amount: receiptPreviewTx.amount
+        },
+        ...(receiptIsFailed
+          ? [
+              { label: 'Jumlah dibayar', amount: 0 },
+              {
+                label: 'Sisa tagihan',
+                amount: receiptPreviewTx.amount,
+                total: true
+              }
+            ]
+          : [
+              {
+                label: receiptIsRefund ? 'Total dikembalikan' : 'Total dibayar',
+                amount: receiptPreviewTx.amount,
+                total: true
+              }
+            ])
+      ]
+    : [];
+  const receiptFooterNote = receiptIsRefund
+    ? 'Bukti ini mencatat pengembalian dana ke saldo korporat.'
+    : receiptIsFailed
+    ? 'Transaksi ini tidak berhasil diproses. Tidak ada pembayaran yang diterima.'
+    : receiptPreviewTx?.type === 'ESCROW_LOCK'
+    ? 'Dana telah diamankan di escrow HarianPay. Bukti ini bukan konfirmasi pencairan upah ke rekening pekerja.'
+    : 'Simpan bukti transaksi ini untuk arsip pembayaran HarianPay.';
 
   // ============================================================================
   // 14. MAIN COMPONENT RETURN & MODALS
@@ -9175,64 +9386,213 @@ export default function App() {
         onClose={() => setReceiptPreviewTx(null)}
         labelledBy={receiptDialogTitleId}
         maxWidthClass="max-w-md"
+        dialogClassName="receipt-print-dialog"
       >
         {receiptPreviewTx && (
-          <div>
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DCE8FD]">
-              <div>
-                <span className="text-[11px] font-mono-metric font-bold text-accent-primary">
-                  BUKTI RESMI HARIANPAY
-                </span>
-                <h1 id={receiptDialogTitleId} className="heading-tight text-lg">
-                  {receiptPreviewTx.invoiceId}
-                </h1>
+          <div className="receipt-print-area">
+            <div className="receipt-screen-view">
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DCE8FD]">
+                <div>
+                  <span className="text-[11px] font-mono-metric font-bold text-accent-primary">
+                    BUKTI TRANSAKSI HARIANPAY
+                  </span>
+                  <h1
+                    id={receiptDialogTitleId}
+                    className="heading-tight text-lg"
+                  >
+                    {receiptPreviewTx.invoiceId}
+                  </h1>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReceiptPreviewTx(null)}
+                  className="receipt-print-action p-2 rounded-full hover:bg-white/80"
+                  aria-label="Tutup nota transaksi"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setReceiptPreviewTx(null)}
-                className="p-2 rounded-full hover:bg-white/80"
-                aria-label="Tutup nota transaksi"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              <div className="p-4 rounded-2xl bg-[#F5F8FF] border border-[#CBDDFC] space-y-2 text-xs mb-5">
+                <div className="flex justify-between">
+                  <span className="text-[#526382]">Waktu Transaksi</span>
+                  <span className="font-semibold">
+                    {receiptPreviewTx.createdAt}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#526382]">Instansi</span>
+                  <span className="font-semibold">
+                    {hrdProfile.companyName}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#526382]">Metode</span>
+                  <span className="font-semibold text-right">
+                    {receiptPreviewTx.method}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#526382]">Keterangan</span>
+                  <span className="font-semibold text-right max-w-[60%]">
+                    {receiptPreviewTx.title}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#526382]">Status</span>
+                  <span className="font-semibold text-right">
+                    {receiptStatusLabel}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-dashed border-[#BFD6FA] flex justify-between text-sm font-bold">
+                  <span>Nominal</span>
+                  <span className="font-mono-metric text-accent-primary">
+                    {formatRupiah(receiptPreviewTx.amount)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="receipt-print-action flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="btn-pill-secondary px-4 py-2.5 text-xs sm:text-sm"
+                >
+                  Cetak / Simpan PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReceiptPreviewTx(null)}
+                  className="btn-pill-primary px-4 py-2.5 text-xs sm:text-sm"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#F5F8FF] border border-[#CBDDFC] space-y-2 text-xs mb-5">
-              <div className="flex justify-between">
-                <span className="text-[#526382]">Waktu Transaksi</span>
-                <span className="font-semibold">{receiptPreviewTx.createdAt}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#526382]">Instansi</span>
-                <span className="font-semibold">{hrdProfile.companyName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#526382]">Metode</span>
-                <span className="font-semibold text-right">
-                  {receiptPreviewTx.method}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#526382]">Keterangan</span>
-                <span className="font-semibold text-right max-w-[60%]">
-                  {receiptPreviewTx.title}
-                </span>
-              </div>
-              <div className="pt-2 border-t border-dashed border-[#BFD6FA] flex justify-between text-sm font-bold">
-                <span>Nominal</span>
-                <span className="font-mono-metric text-accent-primary">
-                  {formatRupiah(receiptPreviewTx.amount)}
-                </span>
-              </div>
-            </div>
+            <article className="receipt-page receipt-print-only">
+              <header className="receipt-header">
+                <div className="receipt-brand">
+                  <div>
+                    <p className="receipt-brand-name">HarianPay</p>
+                    <p className="receipt-brand-caption">
+                      Pembayaran kerja harian
+                    </p>
+                    <p className="receipt-brand-caption">
+                      Bukti transaksi elektronik
+                    </p>
+                  </div>
+                </div>
+                <div className="receipt-heading">
+                  <h1>{receiptHeading}</h1>
+                  <p>No. bukti {receiptPreviewTx.invoiceId}</p>
+                  <p>Diterbitkan {receiptPreviewTx.createdAt}</p>
+                </div>
+              </header>
 
-            <button
-              type="button"
-              onClick={() => setReceiptPreviewTx(null)}
-              className="btn-pill-primary w-full py-2.5 text-xs sm:text-sm"
-            >
-              Tutup Bukti Pembayaran
-            </button>
+              <section className="receipt-amount-panel">
+                <div>
+                  <p className="receipt-amount-label">{receiptAmountLabel}</p>
+                  <p className="receipt-amount-value">
+                    {formatRupiah(receiptPreviewTx.amount)}
+                  </p>
+                </div>
+                <span
+                  className={`receipt-status-stamp ${
+                    receiptIsFailed
+                      ? 'is-failed'
+                      : receiptIsRefund
+                      ? 'is-refunded'
+                      : ''
+                  }`}
+                >
+                  {receiptStampLabel}
+                </span>
+              </section>
+
+              <section className="receipt-details-grid">
+                <div>
+                  <h2>{receiptIsRefund ? 'Dikembalikan kepada' : 'Dibayar oleh'}</h2>
+                  <p className="receipt-company-name">
+                    {hrdProfile.companyName}
+                  </p>
+                  <p>{hrdProfile.picContact}</p>
+                  {hrdProfile.location && <p>{hrdProfile.location}</p>}
+                  {hrdProfile.industry && <p>{hrdProfile.industry}</p>}
+                </div>
+                <div>
+                  <h2>Detail pembayaran</h2>
+                  <dl className="receipt-detail-list">
+                    <div>
+                      <dt>Tanggal</dt>
+                      <dd>{receiptPreviewTx.createdAt}</dd>
+                    </div>
+                    <div>
+                      <dt>Metode</dt>
+                      <dd>{receiptPreviewTx.method}</dd>
+                    </div>
+                    <div>
+                      <dt>ID transaksi</dt>
+                      <dd>{receiptPreviewTx.id}</dd>
+                    </div>
+                    <div>
+                      <dt>No. invoice</dt>
+                      <dd>{receiptPreviewTx.invoiceId}</dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{receiptStatusLabel}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </section>
+
+              <section className="receipt-items-section">
+                <h2>Rincian transaksi</h2>
+                <table className="receipt-items-table">
+                  <thead>
+                    <tr>
+                      <th>Keterangan</th>
+                      <th>Kuantitas</th>
+                      <th>Harga satuan</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <strong>{receiptItemDescription}</strong>
+                        <small>{receiptItemDetail}</small>
+                      </td>
+                      <td>{receiptItemQuantity}</td>
+                      <td>{formatRupiah(receiptItemUnitPrice)}</td>
+                      <td>{formatRupiah(receiptPreviewTx.amount)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <dl className="receipt-totals">
+                  {receiptTotals.map((row) => (
+                    <div
+                      key={row.label}
+                      className={row.total ? 'receipt-total-final' : ''}
+                    >
+                      <dt>{row.label}</dt>
+                      <dd>{formatRupiah(row.amount)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+
+              <footer className="receipt-footer">
+                <p>{receiptFooterNote}</p>
+                <p className="receipt-thank-you">
+                  Terima kasih telah menggunakan HarianPay.
+                </p>
+                <p className="receipt-footer-brand">
+                  HarianPay • Layanan pembayaran kerja harian
+                </p>
+              </footer>
+            </article>
           </div>
         )}
       </NativeModalDialog>
