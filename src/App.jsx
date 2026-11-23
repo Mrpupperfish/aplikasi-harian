@@ -1194,6 +1194,7 @@ const NativeModalDialog = ({
 };
 
 const INITIAL_WORKER_PROFILE = {
+  id: 'worker-demo-budi',
   fullName: 'Budi Santoso',
   phone: '+62 812-3456-7890',
   city: 'Bekasi, Jawa Barat',
@@ -1697,6 +1698,34 @@ const INITIAL_TRANSACTIONS = [
   }
 ];
 
+const normalizeWorkerCandidates = (candidates, workerProfileId) => {
+  const workerIdsByEmail = new Map();
+  return candidates.map((candidate) => {
+    const email = String(candidate.email || '').trim().toLowerCase();
+    const workerId =
+      candidate.workerId ||
+      (email === 'budisantoso@gmail.com'
+        ? workerProfileId
+        : email && email !== 'kandidat@harian.id'
+          ? workerIdsByEmail.get(email) || `worker-${candidate.id}`
+          : `worker-${candidate.id}`);
+
+    if (email && email !== 'kandidat@harian.id') {
+      workerIdsByEmail.set(email, workerId);
+    }
+
+    return {
+      email: 'kandidat@harian.id',
+      phone: '+62 812-0000-0000',
+      city: 'Jabodetabek',
+      notes: '',
+      documents: [],
+      ...candidate,
+      workerId
+    };
+  });
+};
+
 const loadPersistedSprint3Db = () => {
   if (typeof window === 'undefined') {
     return {
@@ -1704,7 +1733,10 @@ const loadPersistedSprint3Db = () => {
       hrdProfile: INITIAL_HRD_PROFILE,
       jobs: INITIAL_JOBS,
       applications: INITIAL_APPLICATIONS,
-      candidates: INITIAL_CANDIDATES,
+      candidates: normalizeWorkerCandidates(
+        INITIAL_CANDIDATES,
+        INITIAL_WORKER_PROFILE.id
+      ),
       hrdWalletBalance: 25000000,
       paymentTransactions: INITIAL_TRANSACTIONS,
       workerNotifications: []
@@ -1714,8 +1746,33 @@ const loadPersistedSprint3Db = () => {
     const raw = window.localStorage.getItem(HARIAN_DB_STORAGE_KEY);
     if (!raw) throw new Error('empty');
     const parsed = JSON.parse(raw);
+    const workerProfile = {
+      ...INITIAL_WORKER_PROFILE,
+      ...(parsed.workerProfile || {}),
+      id: parsed.workerProfile?.id || INITIAL_WORKER_PROFILE.id
+    };
+    const candidates = normalizeWorkerCandidates(
+      Array.isArray(parsed.candidates)
+        ? parsed.candidates
+        : INITIAL_CANDIDATES,
+      workerProfile.id
+    );
+    const workerIdByCandidateId = new Map(
+      candidates.map((candidate) => [candidate.id, candidate.workerId])
+    );
+    const workerNotifications = (
+      Array.isArray(parsed.workerNotifications) ? parsed.workerNotifications : []
+    )
+      .map((notification) => ({
+        ...notification,
+        workerId:
+          workerIdByCandidateId.get(notification.workerId) ||
+          notification.workerId
+      }))
+      .filter((notification) => notification.workerId);
+
     return {
-      workerProfile: { ...INITIAL_WORKER_PROFILE, ...(parsed.workerProfile || {}) },
+      workerProfile,
       hrdProfile: { ...INITIAL_HRD_PROFILE, ...(parsed.hrdProfile || {}) },
       jobs: Array.isArray(parsed.jobs)
         ? parsed.jobs.map((j) => ({ status: 'OPEN', ...j }))
@@ -1723,24 +1780,13 @@ const loadPersistedSprint3Db = () => {
       applications: Array.isArray(parsed.applications)
         ? parsed.applications.map((a) => ({ documents: [], ...a }))
         : INITIAL_APPLICATIONS,
-      candidates: Array.isArray(parsed.candidates)
-        ? parsed.candidates.map((c) => ({
-            email: 'kandidat@harian.id',
-            phone: '+62 812-0000-0000',
-            city: 'Jabodetabek',
-            notes: '',
-            documents: [],
-            ...c
-          }))
-        : INITIAL_CANDIDATES,
+      candidates,
       hrdWalletBalance:
         typeof parsed.hrdWalletBalance === 'number' ? parsed.hrdWalletBalance : 25000000,
       paymentTransactions: Array.isArray(parsed.paymentTransactions)
         ? parsed.paymentTransactions
         : INITIAL_TRANSACTIONS,
-      workerNotifications: Array.isArray(parsed.workerNotifications)
-        ? parsed.workerNotifications
-        : []
+      workerNotifications
     };
   } catch {
     return {
@@ -1748,7 +1794,10 @@ const loadPersistedSprint3Db = () => {
       hrdProfile: INITIAL_HRD_PROFILE,
       jobs: INITIAL_JOBS,
       applications: INITIAL_APPLICATIONS,
-      candidates: INITIAL_CANDIDATES,
+      candidates: normalizeWorkerCandidates(
+        INITIAL_CANDIDATES,
+        INITIAL_WORKER_PROFILE.id
+      ),
       hrdWalletBalance: 25000000,
       paymentTransactions: INITIAL_TRANSACTIONS,
       workerNotifications: []
@@ -2799,6 +2848,7 @@ export default function App() {
     setCandidates((prev) => [
       {
         id: 'cand-' + Date.now(),
+        workerId: workerProfile.id,
         applicationId: newAppId,
         jobId: job.id,
         name: workerProfile.fullName,
@@ -2946,7 +2996,7 @@ export default function App() {
         setWorkerNotifications((prev) => [
           ...eligibleWorkers.map((worker) => ({
             id: `notif-${transaction.id}-${worker.id}`,
-            workerId: worker.id,
+            workerId: worker.workerId,
             workerName: worker.name,
             jobId: targetJob.id,
             jobTitle: targetJob.title,
@@ -5778,7 +5828,7 @@ export default function App() {
         null
       : null;
     const visibleWorkerNotifications = workerNotifications.filter(
-      (notification) => notification.workerName === workerProfile.fullName
+      (notification) => notification.workerId === workerProfile.id
     );
     const alreadyAppliedModal = modalJob
       ? applications.some(
