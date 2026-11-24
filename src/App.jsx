@@ -1002,9 +1002,13 @@ const loadPersistedSession = () => {
 
     const workerSubTab =
       parsed.workerSubTab === 'applications' ? 'applications' : 'explore';
-    const hrdSubTab = ['jobs', 'applicants', 'mfep', 'escrow'].includes(
-      parsed.hrdSubTab
-    )
+    const hrdSubTab = [
+      'jobs',
+      'applicants',
+      'mfep',
+      'escrow',
+      'receipts'
+    ].includes(parsed.hrdSubTab)
       ? parsed.hrdSubTab
       : 'jobs';
 
@@ -1211,6 +1215,27 @@ const INITIAL_HRD_PROFILE = {
   paymentMethod: 'Virtual Account BCA (Escrow HarianPay)'
 };
 
+const getTodayIsoDate = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const formatWorkDateLabel = (isoDate) => {
+  if (!isoDate) return '-';
+  const parts = String(isoDate).split('-');
+  if (parts.length !== 3) return String(isoDate);
+  const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  if (Number.isNaN(dt.getTime())) return String(isoDate);
+  return dt.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+
 const INITIAL_JOBS = [
   {
     id: 'job-1',
@@ -1218,6 +1243,7 @@ const INITIAL_JOBS = [
     company: 'FastLogistics ID',
     location: 'Bekasi',
     rate: 175000,
+    workDate: '2026-11-28',
     workTime: '22:00 - 06:00',
     scheduleType: 'Night Shift',
     category: 'Logistics & Warehouse',
@@ -1238,6 +1264,7 @@ const INITIAL_JOBS = [
     company: 'PT Karya Maju',
     location: 'ICE BSD',
     rate: 250000,
+    workDate: '2026-11-29',
     workTime: '09:00 - 17:00',
     scheduleType: 'Morning Shift',
     category: 'Event Staff',
@@ -1258,6 +1285,7 @@ const INITIAL_JOBS = [
     company: 'Hotel Mulia Senayan',
     location: 'Jakarta',
     rate: 185000,
+    workDate: '2026-11-30',
     workTime: '07:00 - 15:00',
     scheduleType: 'Morning Shift',
     category: 'Hospitality',
@@ -1278,6 +1306,7 @@ const INITIAL_JOBS = [
     company: 'Restoran FGH Sudirman',
     location: 'Jakarta',
     rate: 150000,
+    workDate: '2026-12-01',
     workTime: '10:00 - 18:00',
     scheduleType: 'Morning Shift',
     category: 'Hospitality',
@@ -1298,6 +1327,7 @@ const INITIAL_JOBS = [
     company: 'PT Karya Maju',
     location: 'Bekasi',
     rate: 190000,
+    workDate: '2026-12-02',
     workTime: '08:00 - 16:00',
     scheduleType: 'Morning Shift',
     category: 'Logistics & Warehouse',
@@ -1318,6 +1348,7 @@ const INITIAL_JOBS = [
     company: 'PT Karya Maju',
     location: 'Jakarta',
     rate: 220000,
+    workDate: '2026-12-03',
     workTime: '07:30 - 15:30',
     scheduleType: 'Morning Shift',
     category: 'Event Staff',
@@ -1338,6 +1369,7 @@ const INITIAL_JOBS = [
     company: 'FastLogistics ID',
     location: 'Bekasi',
     rate: 165000,
+    workDate: '2026-11-24',
     workTime: '20:00 - 04:00',
     scheduleType: 'Night Shift',
     category: 'Logistics & Warehouse',
@@ -1739,7 +1771,8 @@ const loadPersistedSprint3Db = () => {
       ),
       hrdWalletBalance: 25000000,
       paymentTransactions: INITIAL_TRANSACTIONS,
-      workerNotifications: []
+      workerNotifications: [],
+      hrdNotifications: []
     };
   }
   try {
@@ -1770,12 +1803,19 @@ const loadPersistedSprint3Db = () => {
           notification.workerId
       }))
       .filter((notification) => notification.workerId);
+    const seedWorkDateById = new Map(
+      INITIAL_JOBS.map((job) => [job.id, job.workDate])
+    );
 
     return {
       workerProfile,
       hrdProfile: { ...INITIAL_HRD_PROFILE, ...(parsed.hrdProfile || {}) },
       jobs: Array.isArray(parsed.jobs)
-        ? parsed.jobs.map((j) => ({ status: 'OPEN', ...j }))
+        ? parsed.jobs.map((j) => ({
+            status: 'OPEN',
+            workDate: seedWorkDateById.get(j.id) || '2026-11-28',
+            ...j
+          }))
         : INITIAL_JOBS,
       applications: Array.isArray(parsed.applications)
         ? parsed.applications.map((a) => ({ documents: [], ...a }))
@@ -1786,7 +1826,10 @@ const loadPersistedSprint3Db = () => {
       paymentTransactions: Array.isArray(parsed.paymentTransactions)
         ? parsed.paymentTransactions
         : INITIAL_TRANSACTIONS,
-      workerNotifications
+      workerNotifications,
+      hrdNotifications: Array.isArray(parsed.hrdNotifications)
+        ? parsed.hrdNotifications
+        : []
     };
   } catch {
     return {
@@ -1800,7 +1843,8 @@ const loadPersistedSprint3Db = () => {
       ),
       hrdWalletBalance: 25000000,
       paymentTransactions: INITIAL_TRANSACTIONS,
-      workerNotifications: []
+      workerNotifications: [],
+      hrdNotifications: []
     };
   }
 };
@@ -2054,6 +2098,11 @@ export default function App() {
   const [workerNotifications, setWorkerNotifications] = useState(
     initialDb.workerNotifications
   );
+  const [hrdNotifications, setHrdNotifications] = useState(
+    initialDb.hrdNotifications
+  );
+  const [confirmCancelAppModal, setConfirmCancelAppModal] = useState(null);
+  const [emptyReportModal, setEmptyReportModal] = useState(false);
 
   // US-08: Edit, Close, Delete Job States
   const [hrdJobStatusFilter, setHrdJobStatusFilter] = useState('ALL');
@@ -2107,6 +2156,7 @@ export default function App() {
   const [filterLocation, setFilterLocation] = useState('ALL');
   const [filterCategory, setFilterCategory] = useState('ALL');
   const [filterShift, setFilterShift] = useState('ALL');
+  const [filterDate, setFilterDate] = useState('');
   const [filterMinRate, setFilterMinRate] = useState('');
 
   // Create Job Modal State (US-03)
@@ -2117,6 +2167,7 @@ export default function App() {
     location: 'Bekasi',
     rate: 175000,
     quota: 10,
+    workDate: '2026-11-29',
     workTime: '08:00 - 16:00',
     scheduleType: 'Morning Shift',
     category: 'Logistics & Warehouse',
@@ -2135,6 +2186,8 @@ export default function App() {
   const previewDocDialogTitleId = useId();
   const paymentDialogTitleId = useId();
   const receiptDialogTitleId = useId();
+  const cancelAppDialogTitleId = useId();
+  const emptyReportDialogTitleId = useId();
 
   // Persist Sprint 3 Database State to localStorage Consistently
   useEffect(() => {
@@ -2164,7 +2217,8 @@ export default function App() {
       })),
       hrdWalletBalance,
       paymentTransactions,
-      workerNotifications
+      workerNotifications,
+      hrdNotifications
     };
 
     try {
@@ -2198,7 +2252,8 @@ export default function App() {
     candidates,
     hrdWalletBalance,
     paymentTransactions,
-    workerNotifications
+    workerNotifications,
+    hrdNotifications
   ]);
 
   // Scroll & Animation Refs
@@ -2408,6 +2463,8 @@ export default function App() {
     setPreviewDocModal(null);
     setPaymentModal(null);
     setReceiptPreviewTx(null);
+    setConfirmCancelAppModal(null);
+    setEmptyReportModal(false);
     setActiveView('landing');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     triggerToast('Anda telah keluar dari sesi akun.');
@@ -2427,10 +2484,13 @@ export default function App() {
     setHrdProfileDraft(INITIAL_HRD_PROFILE);
     setJobs(INITIAL_JOBS);
     setApplications(INITIAL_APPLICATIONS);
-    setCandidates(INITIAL_CANDIDATES);
+    setCandidates(
+      normalizeWorkerCandidates(INITIAL_CANDIDATES, INITIAL_WORKER_PROFILE.id)
+    );
     setHrdWalletBalance(25000000);
     setPaymentTransactions(INITIAL_TRANSACTIONS);
     setWorkerNotifications([]);
+    setHrdNotifications([]);
     setHrdJobStatusFilter('ALL');
     setApplicantSearchQuery('');
     setApplicantRoleFilter('ALL');
@@ -2474,7 +2534,7 @@ export default function App() {
     switchView('register');
   };
 
-  // Filtered Active Jobs for Applicants (UC-05 & US-08: exclude CLOSED jobs!)
+  // Filtered Active Jobs for Applicants (US-04, US-05 & US-08: exclude CLOSED jobs!)
   const filteredJobs = useMemo(() => {
     const kw = filterKeyword.trim().toLowerCase();
     const minRateVal = Number(filterMinRate || 0);
@@ -2491,10 +2551,19 @@ export default function App() {
         filterCategory === 'ALL' || job.category === filterCategory;
       const matchShift =
         filterShift === 'ALL' || job.scheduleType === filterShift;
+      const matchDate = !filterDate || job.workDate === filterDate;
       const matchRate = job.rate >= minRateVal;
-      return matchKw && matchLoc && matchCat && matchShift && matchRate;
+      return matchKw && matchLoc && matchCat && matchShift && matchDate && matchRate;
     });
-  }, [jobs, filterKeyword, filterLocation, filterCategory, filterShift, filterMinRate]);
+  }, [
+    jobs,
+    filterKeyword,
+    filterLocation,
+    filterCategory,
+    filterShift,
+    filterDate,
+    filterMinRate
+  ]);
 
   // Filtered Jobs for HRD Management Table (US-08)
   const hrdFilteredJobs = useMemo(() => {
@@ -2585,6 +2654,10 @@ export default function App() {
       triggerToast(
         'Mohon centang persetujuan Syarat & Ketentuan serta Service Charge 10% terlebih dahulu.'
       );
+      return;
+    }
+    if (registerPassword.length < 6) {
+      triggerToast('Kata sandi minimal 6 karakter agar akun Anda aman.');
       return;
     }
     if (registerPassword !== registerConfirmPassword) {
@@ -2868,15 +2941,36 @@ export default function App() {
       ...prev
     ]);
 
+    setHrdNotifications((prev) => [
+      {
+        id: 'hrd-notif-' + Date.now(),
+        jobId: job.id,
+        jobTitle: job.title,
+        applicantName: workerProfile.fullName,
+        createdAt: appliedTime,
+        message: `Pelamar baru "${workerProfile.fullName}" mengajukan lamaran untuk lowongan "${job.title}" dengan ${attachedDocs.length} berkas persyaratan.`
+      },
+      ...prev
+    ]);
+
     setApplyUploadDocs({ CV: null, KTP: null, 'Surat Pendukung': null });
     setApplyUploadError('');
     triggerToast(
-      `Berkas berhasil diunggah & lamaran ke ${job.title} tersimpan untuk diperiksa HRD!`
+      `Berkas berhasil diunggah & lamaran ke ${job.title} tersimpan (Status: Pending) serta notifikasi dikirim ke Instansi!`
     );
     return true;
   };
 
   const handleCancelApplication = (appId) => {
+    const targetApp = applications.find((a) => a.id === appId);
+    if (!targetApp) return;
+    if (targetApp.status !== 'Pending') {
+      triggerToast(
+        'Lamaran yang sudah diproses (Diterima/Ditolak) tidak dapat dibatalkan.'
+      );
+      setConfirmCancelAppModal(null);
+      return;
+    }
     setApplications((prev) =>
       prev.map((a) =>
         a.id === appId && a.status === 'Pending'
@@ -2887,7 +2981,20 @@ export default function App() {
     setCandidates((prev) =>
       prev.filter((c) => !(c.applicationId === appId && c.status === 'Pending'))
     );
-    triggerToast('Lamaran berstatus Pending berhasil dibatalkan.');
+    setJobs((prev) =>
+      prev.map((j) =>
+        j.id === targetApp.jobId
+          ? {
+              ...j,
+              applicantsCount: Math.max(0, Number(j.applicantsCount || 0) - 1)
+            }
+          : j
+      )
+    );
+    setConfirmCancelAppModal(null);
+    triggerToast(
+      `Lamaran pada "${targetApp.jobTitle}" berhasil dibatalkan dan slot antrean dikosongkan.`
+    );
   };
 
   const isApplicationLinkedToCandidate = (application, candidate) => {
@@ -2915,9 +3022,30 @@ export default function App() {
           return a;
         })
       );
+      setWorkerNotifications((prev) => [
+        {
+          id: `notif-decision-${Date.now()}-${target.id}`,
+          type: 'DECISION',
+          decision,
+          title:
+            decision === 'Diterima'
+              ? 'Selamat! Lamaran Anda Diterima'
+              : 'Pembaruan Status Lamaran',
+          workerId: target.workerId,
+          workerName: target.name,
+          jobId: target.jobId,
+          jobTitle: target.roleTarget,
+          createdAt: nowTimeLabel(),
+          message:
+            decision === 'Diterima'
+              ? `HRD telah menyetujui lamaran Anda pada posisi "${target.roleTarget}". Silakan pantau jadwal kerja dan status pembayaran di portal Anda.`
+              : `Status lamaran Anda pada posisi "${target.roleTarget}" telah diperbarui menjadi "Ditolak". Anda dapat melamar lowongan harian lainnya yang tersedia.`
+        },
+        ...prev
+      ]);
     }
     triggerToast(
-      `Status kandidat diperbarui menjadi "${decision}" secara real-time.`
+      `Status kandidat diperbarui menjadi "${decision}" secara real-time & notifikasi dikirim ke pelamar.`
     );
   };
 
@@ -3125,10 +3253,17 @@ export default function App() {
     if (
       !newJobForm.title?.trim() ||
       !newJobForm.location?.trim() ||
+      !newJobForm.workDate?.trim() ||
       !newJobForm.workTime?.trim() ||
       !newJobForm.description?.trim()
     ) {
       setCreateJobError('Kolom wajib isi tidak boleh kosong.');
+      return;
+    }
+    if (newJobForm.workDate < getTodayIsoDate()) {
+      setCreateJobError(
+        'Tanggal kerja sudah lewat. Pilih tanggal hari ini atau tanggal mendatang.'
+      );
       return;
     }
     const rateNum = Number(newJobForm.rate || 0);
@@ -3149,6 +3284,7 @@ export default function App() {
       company: hrdProfile.companyName || 'PT Karya Maju',
       location: newJobForm.location.trim(),
       rate: rateNum,
+      workDate: newJobForm.workDate.trim(),
       workTime: newJobForm.workTime.trim(),
       scheduleType: newJobForm.scheduleType || 'Morning Shift',
       category: newJobForm.category || 'Logistics & Warehouse',
@@ -3657,26 +3793,31 @@ export default function App() {
     triggerToast(`Salinan berkas terverifikasi "${doc.fileName}" berhasil diunduh.`);
   };
 
-  // US-21: Unduh Laporan Rekrutmen CSV (khusus kandidat diterima; pesan kosong bila belum ada)
+  // US-21: Unduh Laporan Rekrutmen CSV (khusus kandidat diterima; pop-up pesan kosong bila belum ada)
   const handleDownloadCsv = () => {
     const acceptedCandidates = rankedCandidates.filter(
       (c) => c.status === 'Diterima'
     );
     if (acceptedCandidates.length === 0) {
+      setEmptyReportModal(true);
       triggerToast(
         'Laporan kosong. Belum ada kandidat yang diterima untuk diekspor.'
       );
       return;
     }
     const headers = [
-      'Rank,Nama Kandidat,Kontak,Domisili,Posisi,Jumlah Berkas,Skor MFEP,Status\n'
+      'Rank,Nama Kandidat,Kontak,Domisili,Posisi,Tanggal Kerja,Jadwal Shift,Upah Harian,Jumlah Berkas,Skor MFEP,Status\n'
     ];
-    const rows = acceptedCandidates.map(
-      (c, i) =>
-        `${i + 1},"${c.name}","${c.phone || '-'}","${c.city || '-'}","${
-          c.roleTarget
-        }",${(c.documents || []).length},${c.mfepScore},${c.status}`
-    );
+    const rows = acceptedCandidates.map((c, i) => {
+      const matchedJob = jobs.find(
+        (j) => j.id === c.jobId || j.title === c.roleTarget
+      );
+      return `${i + 1},"${c.name}","${c.phone || '-'}","${c.city || '-'}","${
+        c.roleTarget
+      }","${matchedJob?.workDate || '-'}","${matchedJob?.workTime || '-'}",${
+        matchedJob?.rate || 0
+      },${(c.documents || []).length},${c.mfepScore},${c.status}`;
+    });
     const blob = new Blob([headers.concat(rows.join('\n'))], {
       type: 'text/csv;charset=utf-8;'
     });
@@ -5909,28 +6050,60 @@ export default function App() {
 
           {visibleWorkerNotifications.length > 0 && (
             <section
-              aria-label="Notifikasi pembayaran"
+              aria-label="Notifikasi pekerja"
               className="space-y-3 mb-6"
             >
-              {visibleWorkerNotifications.slice(0, 3).map((notification) => (
-                <article
-                  key={notification.id}
-                  role="status"
-                  className="harian-surface-card p-5 border-l-4 border-emerald-500"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                    <h3 className="text-sm font-bold text-emerald-800">
-                      Dana upah diamankan di escrow
-                    </h3>
-                    <span className="text-[11px] text-[#526382]">
-                      {notification.createdAt}
-                    </span>
-                  </div>
-                  <p className="text-xs leading-relaxed">
-                    {notification.message}
-                  </p>
-                </article>
-              ))}
+              {visibleWorkerNotifications.slice(0, 3).map((notification) => {
+                const isRejected = notification.decision === 'Ditolak';
+                const isDecision = notification.type === 'DECISION';
+                return (
+                  <article
+                    key={notification.id}
+                    role="status"
+                    className={`harian-surface-card p-5 border-l-4 ${
+                      isRejected
+                        ? 'border-red-500'
+                        : isDecision
+                        ? 'border-[#1D6FE8]'
+                        : 'border-emerald-500'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                      <h3
+                        className={`text-sm font-bold ${
+                          isRejected
+                            ? 'text-red-700'
+                            : isDecision
+                            ? 'text-[#1D6FE8]'
+                            : 'text-emerald-800'
+                        }`}
+                      >
+                        {notification.title || 'Dana upah diamankan di escrow'}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-[#526382]">
+                          {notification.createdAt}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setWorkerNotifications((prev) =>
+                              prev.filter((n) => n.id !== notification.id)
+                            )
+                          }
+                          className="text-[11px] font-semibold text-[#526382] hover:text-[#091326]"
+                          aria-label="Tutup notifikasi"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs leading-relaxed">
+                      {notification.message}
+                    </p>
+                  </article>
+                );
+              })}
             </section>
           )}
 
@@ -5951,6 +6124,7 @@ export default function App() {
                         setFilterLocation('ALL');
                         setFilterCategory('ALL');
                         setFilterShift('ALL');
+                        setFilterDate('');
                         setFilterMinRate('');
                       }}
                       className="text-xs font-semibold text-accent-primary hover:underline"
@@ -6067,6 +6241,29 @@ export default function App() {
 
                   <div>
                     <label
+                      htmlFor="filterDateInput"
+                      className="block text-xs font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      Tanggal Kerja
+                    </label>
+                    <input
+                      id="filterDateInput"
+                      type="date"
+                      aria-invalid="false"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border text-xs font-mono-metric"
+                      style={{
+                        backgroundColor: 'var(--bg-soft)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text)'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label
                       htmlFor="filterMinRateInput"
                       className="block text-xs font-semibold mb-1"
                       style={{ color: 'var(--text)' }}
@@ -6089,6 +6286,20 @@ export default function App() {
                       }}
                     />
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      triggerToast(
+                        filteredJobs.length > 0
+                          ? `Filter diterapkan: ditemukan ${filteredJobs.length} lowongan sesuai kriteria.`
+                          : 'Tidak ada lowongan yang sesuai dengan filter Anda. Silahkan ubah kriteria.'
+                      )
+                    }
+                    className="btn-pill-primary w-full py-2.5 text-xs"
+                  >
+                    Terapkan
+                  </button>
                 </search>
               </aside>
 
@@ -6111,6 +6322,7 @@ export default function App() {
                         setFilterLocation('ALL');
                         setFilterCategory('ALL');
                         setFilterShift('ALL');
+                        setFilterDate('');
                         setFilterMinRate('');
                       }}
                       className="btn-pill-secondary px-5 py-2 text-xs"
@@ -6166,7 +6378,9 @@ export default function App() {
                               <div className="text-sm font-bold font-mono-metric text-accent-primary">
                                 {formatRupiah(job.rate)}/hari
                               </div>
-                              <div className="text-[11px]">{job.workTime}</div>
+                              <div className="text-[11px]">
+                                {formatWorkDateLabel(job.workDate)} &bull; {job.workTime}
+                              </div>
                             </div>
                             <span className="text-xs font-semibold text-accent-primary">
                               Detail &amp; Unggah Berkas &rarr;
@@ -6259,7 +6473,22 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                        <div
+                          className="p-3 rounded-2xl border"
+                          style={{
+                            backgroundColor: 'var(--bg-soft)',
+                            borderColor: 'var(--border)'
+                          }}
+                        >
+                          <div className="text-[10px]">Tanggal Kerja</div>
+                          <div
+                            className="text-xs sm:text-sm font-semibold font-mono-metric mt-0.5"
+                            style={{ color: 'var(--text)' }}
+                          >
+                            {formatWorkDateLabel(modalJob.workDate)}
+                          </div>
+                        </div>
                         <div
                           className="p-3 rounded-2xl border"
                           style={{
@@ -6482,7 +6711,7 @@ export default function App() {
                             className="btn-pill-primary px-6 py-2.5 text-xs inline-flex items-center gap-1.5"
                           >
                             <Upload className="w-3.5 h-3.5" />
-                            <span>Unggah &amp; Kirim Lamaran</span>
+                            <span>Unggah Berkas &amp; Lamar Sekarang</span>
                           </button>
                         )}
                       </div>
@@ -6588,7 +6817,7 @@ export default function App() {
                         {app.status === 'Pending' ? (
                           <button
                             type="button"
-                            onClick={() => handleCancelApplication(app.id)}
+                            onClick={() => setConfirmCancelAppModal(app)}
                             className="btn-pill-secondary px-4 py-2 text-xs"
                           >
                             Batalkan Lamaran
@@ -6602,7 +6831,7 @@ export default function App() {
                             }}
                           >
                             {app.status === 'Diterima'
-                              ? 'Diterima HRD'
+                              ? 'Diterima HRD • Tidak dapat dibatalkan'
                               : app.status === 'Dibatalkan'
                               ? 'Dibatalkan'
                               : 'Keputusan Terkunci'}
@@ -6808,6 +7037,44 @@ export default function App() {
 
           {/* Right Main HRD Content */}
           <div className="lg:col-span-9">
+            {hrdNotifications.length > 0 && (
+              <section
+                aria-label="Notifikasi lamaran baru"
+                className="space-y-2.5 mb-5"
+              >
+                {hrdNotifications.slice(0, 2).map((notif) => (
+                  <article
+                    key={notif.id}
+                    role="status"
+                    className="harian-surface-card p-4 border-l-4 border-[#1D6FE8] flex items-start justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                        <span className="text-xs font-bold text-[#1D6FE8]">
+                          Lamaran Masuk Baru
+                        </span>
+                        <span className="text-[11px] text-[#526382]">
+                          {notif.createdAt}
+                        </span>
+                      </div>
+                      <p className="text-xs leading-relaxed">{notif.message}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setHrdNotifications((prev) =>
+                          prev.filter((item) => item.id !== notif.id)
+                        )
+                      }
+                      className="btn-pill-secondary px-3 py-1 text-[11px] shrink-0"
+                    >
+                      Tandai Dibaca
+                    </button>
+                  </article>
+                ))}
+              </section>
+            )}
+
             {/* TAB 1: KELOLA LOWONGAN (US-08: Create, Edit, Close/Reopen, Delete) */}
             {hrdSubTab === 'jobs' && (
               <div className="harian-surface-card p-6 sm:p-8">
@@ -6930,7 +7197,7 @@ export default function App() {
                               <strong className="font-mono-metric text-accent-primary">
                                 {formatRupiah(job.rate)}/hari
                               </strong>{' '}
-                              &bull; {job.workTime} &bull; {job.applicantsCount}{' '}
+                              &bull; {formatWorkDateLabel(job.workDate)} ({job.workTime}) &bull; {job.applicantsCount}{' '}
                               Pelamar ({job.quota} Kuota)
                             </div>
                           </div>
@@ -8165,6 +8432,57 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Tanggal Kerja *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newJobForm.workDate}
+                    onChange={(e) =>
+                      setNewJobForm({ ...newJobForm, workDate: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-mono-metric"
+                    style={{
+                      backgroundColor: 'var(--bg-soft)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text)'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block text-xs font-semibold mb-1"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    Kategori Pekerjaan *
+                  </label>
+                  <select
+                    value={newJobForm.category}
+                    onChange={(e) =>
+                      setNewJobForm({ ...newJobForm, category: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm"
+                    style={{
+                      backgroundColor: 'var(--bg-soft)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text)'
+                    }}
+                  >
+                    <option value="Logistics & Warehouse">
+                      Logistics &amp; Warehouse
+                    </option>
+                    <option value="Event Staff">Event Staff</option>
+                    <option value="Hospitality">Hospitality</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label
                   className="block text-xs font-semibold mb-1"
@@ -8228,7 +8546,7 @@ export default function App() {
                   type="submit"
                   className="btn-pill-primary px-6 py-2.5 text-xs sm:text-sm"
                 >
-                  Kunci Dana Escrow &amp; Publikasikan
+                  Publikasi Lowongan
                 </button>
               </div>
             </form>
@@ -8558,6 +8876,30 @@ export default function App() {
                     className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-none"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="editJobWorkDate"
+                  className="block text-xs font-semibold mb-1"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Tanggal Kerja *
+                </label>
+                <input
+                  id="editJobWorkDate"
+                  type="date"
+                  required
+                  aria-invalid="false"
+                  value={editingJobModal.workDate || '2026-11-28'}
+                  onChange={(e) =>
+                    setEditingJobModal({
+                      ...editingJobModal,
+                      workDate: e.target.value
+                    })
+                  }
+                  className="frosted-input w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-mono-metric focus:outline-none"
+                />
               </div>
 
               <div>
@@ -9645,6 +9987,71 @@ export default function App() {
             </article>
           </div>
         )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-16): KONFIRMASI BATALKAN LAMARAN PENDING */}
+      <NativeModalDialog
+        open={Boolean(confirmCancelAppModal)}
+        onClose={() => setConfirmCancelAppModal(null)}
+        labelledBy={cancelAppDialogTitleId}
+        maxWidthClass="max-w-md"
+      >
+        {confirmCancelAppModal && (
+          <div>
+            <h1 id={cancelAppDialogTitleId} className="heading-tight text-lg mb-2">
+              Batalkan Lamaran?
+            </h1>
+            <p className="text-xs sm:text-sm leading-relaxed mb-5">
+              Anda yakin ingin membatalkan lamaran pada posisi{' '}
+              <strong>{confirmCancelAppModal.jobTitle}</strong> ({confirmCancelAppModal.company})? Status akan berubah menjadi <strong>Dibatalkan</strong> dan slot antrean dikosongkan.
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmCancelAppModal(null)}
+                className="btn-pill-secondary px-4 py-2 text-xs sm:text-sm"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCancelApplication(confirmCancelAppModal.id)}
+                className="btn-pill-primary px-5 py-2 text-xs sm:text-sm"
+                style={{ background: '#DC2626' }}
+              >
+                Ya, Batalkan
+              </button>
+            </div>
+          </div>
+        )}
+      </NativeModalDialog>
+
+      {/* NATIVE MODAL (US-21): POP-UP LAPORAN REKRUTMEN KOSONG */}
+      <NativeModalDialog
+        open={emptyReportModal}
+        onClose={() => setEmptyReportModal(false)}
+        labelledBy={emptyReportDialogTitleId}
+        maxWidthClass="max-w-md"
+      >
+        <div>
+          <h1 id={emptyReportDialogTitleId} className="heading-tight text-lg mb-2">
+            Laporan Kosong
+          </h1>
+          <p className="text-xs sm:text-sm leading-relaxed mb-5">
+            Laporan kosong. Belum ada kandidat yang diterima untuk diekspor.
+          </p>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setEmptyReportModal(false)}
+              className="btn-pill-primary px-5 py-2 text-xs sm:text-sm"
+            >
+              Mengerti
+            </button>
+          </div>
+        </div>
       </NativeModalDialog>
 
       {/* POLITE SCREEN-READER STATUS ANNOUNCER */}
