@@ -1,26 +1,56 @@
-# har/an — Platform Kerja Harian & Payment Gateway
+# HARIAN — Platform Web Lowongan Kerja Harian
 
-**Harian** adalah platform web yang mempertemukan pencari kerja harian (*daily worker*) dengan instansi pemberi kerja secara transparan, cepat, dan aman.
+Prototipe aplikasi web untuk mata kuliah **Manajemen Proyek Tangkas (ES234316)** — **Kelompok 1**, Fakultas Teknologi Elektro dan Informatika Cerdas (FTEIC), Institut Teknologi Sepuluh Nopember (ITS).
+
+**Live Prototype:** https://aplikasi-harian-je5c-murex.vercel.app/
 
 ---
 
-## Ruang Lingkup Fitur (Sprint 1 – Sprint 3)
+## Gambaran Umum
 
-### 1. Sprint 1 — Autentikasi & Eksplorasi Lowongan
-* **Sign Up & Login (`US-01`, `US-02`)**: Pendaftaran dan masuk akun terpisah untuk peran **Pekerja Harian** dan **Perusahaan / HRD** dengan validasi kredensial.
-* **Buat Lowongan Pekerjaan (`US-03`)**: Instansi mempublikasikan lowongan baru lengkap dengan posisi, upah harian, lokasi, jadwal *shift*, kuota, deskripsi, dan kontak PIC.
-* **Pencarian, Filter & Detail Lowongan (`US-04`, `US-05`, `US-06`)**: Pencarian kata kunci, filter lokasi/kategori/shift/upah minimum, serta pratinjau detail lengkap lowongan sebelum melamar.
-* **Ajukan Lamaran (`US-09`)**: Mengajukan lamaran pada lowongan aktif dengan pencegahan lamaran ganda dan pengecekan kuota.
+**HARIAN** adalah platform web lowongan kerja harian (*daily worker*) yang mempertemukan pencari kerja harian dengan instansi atau pemberi kerja secara terbuka tanpa bergantung pada jaringan kenalan atau grup pesan informal.
 
-### 2. Sprint 2 — Seleksi MFEP, Status Real-Time & Verifikasi Pembayaran
-* **Penilaian Berkas Otomatis MFEP (`US-13`)**: Perhitungan otomatis skor kelayakan berkas kandidat dan pengurutan dari skor tertinggi.
-* **Aksi Terima / Tolak & Pelacakan Status (`US-14`, `US-15`, `US-16`)**: Pembaruan status lamaran (`Pending`, `Diterima`, `Ditolak`) secara *real-time* serta pembatalan mandiri untuk lamaran `Pending`.
-* **Verifikasi Pembayaran Payment Gateway (`US-18`)**: Respon verifikasi transaksi `Sukses` (status `Lunas`) maupun `Gagal/Expired` (status `Batal/Gagal` dengan opsi bayar ulang).
-* **Unduh Laporan Rekrutmen CSV (`US-21`)**: Ekspor laporan kandidat yang diterima dalam format `.csv` dengan validasi laporan kosong.
+Platform ini dirancang untuk menjawab masalah utama di lapangan, seperti informasi lowongan yang tersebar tidak terstruktur, kesulitan menyaring pekerjaan sesuai lokasi dan jadwal, proses seleksi kandidat yang lambat, pencatatan riwayat kerja yang belum rapi, serta pembayaran upah yang sering tertunda. Seluruh alur dapat diakses langsung melalui browser tanpa instalasi aplikasi tambahan.
 
-### 3. Sprint 3 — Profil Dasar, Manajemen Lowongan, Berkas & Pemroses Pembayaran
-* **Pembaruan Profil Dasar (`US-07`)**: Pembaruan profil dasar (nama, kontak aktif, domisili/industri, deskripsi singkat) untuk Pekerja dan Instansi dengan validasi kolom wajib.
-* **Edit, Tutup & Hapus Lowongan (`US-08`)**: Manajemen siklus lowongan; lowongan yang ditutup atau dihapus otomatis hilang dari pencarian aktif pelamar.
-* **Unggah Berkas Persyaratan Lamaran (`US-10`)**: Unggah berkas **CV**, **KTP**, dan **Surat Pendukung** (`PDF, JPG, PNG, DOC, DOCX`, maks. `5 MB`) yang langsung terhubung ke dashboard HRD.
-* **Kelola Pelamar (`US-12`)**: Menu CRUD penuh (lihat, tambah, ubah, hapus pelamar) lengkap dengan tautan pratinjau dan unduh berkas persyaratan.
-* **Tagihan Pembayaran & Payment Gateway (`US-17`)**: Kalkulasi otomatis tagihan (`jumlah pekerja × upah`), pemilihan kanal pembayaran (*Virtual Account*, *QRIS*, *E-Wallet*), serta bukti nota transaksi resmi.
+---
+
+## Fitur Utama
+
+### Bagi Pekerja Harian (*Daily Worker*)
+* **Pencarian & Filter Lowongan:** Menelusuri lowongan aktif berdasarkan kata kunci serta menyaringnya lewat lokasi, tanggal/waktu kerja, nominal upah, dan jenis pekerjaan.
+* **Detail Lowongan & Lamaran Online:** Melihat informasi lengkap lowongan (upah, lokasi, jadwal/shift, deskripsi, syarat, kuota, dan kontak) serta mengajukan lamaran langsung atau membatalkan lamaran yang masih berstatus *Pending*.
+* **Pelacakan Status Real-Time:** Memantau perubahan status lamaran secara langsung beserta notifikasi hasilnya.
+* **Profil, Riwayat Kerja & Rekening:** Mengelola data profil, riwayat pengalaman kerja, dokumen persyaratan, dan nomor rekening bank untuk keperluan pencairan upah serta rekomendasi pekerjaan.
+* **Kepastian Pencairan Upah (H+2):** Skema pembayaran melalui rekening penengah (*escrow*) dengan pencairan upah maksimal H+2 setelah pekerjaan selesai dan informasi potongan *service fee* 10% yang transparan.
+
+### Bagi Instansi / HRD & Manajemen
+* **Manajemen Lowongan:** Membuat, mempublikasikan, mengedit, menutup, atau menghapus lowongan harian beserta validasi tanggal, kuota, dan upah.
+* **Kelola Pelamar & Seleksi Otomatis MFEP:** Mengelola data dan berkas pelamar, menghitung skor kelayakan kandidat secara otomatis menggunakan metode *Multi-Factor Evaluation Process* (MFEP), serta memproses keputusan terima atau tolak kandidat.
+* **Tagihan Pembayaran & Verifikasi:** Menghitung total tagihan upah otomatis, melakukan pembayaran ke rekening bersama, dan memverifikasi status transaksi pembayaran.
+* **Ekspor Laporan Rekrutmen:** Mengunduh rekap hasil rekrutmen (pekerja diterima, jadwal, dan upah) dalam format PDF atau CSV.
+
+---
+
+## Teknologi & Tools
+
+* **Frontend:** React, TypeScript / JavaScript, Vite
+* **Deployment:** Vercel
+* **Manajemen Proyek & Dokumentasi:** Notion (*Product Backlog* & *Product Roadmap*), Google Workspace
+* **Version Control:** Git & GitHub
+
+
+
+## Cara Menjalankan Proyek Secara Lokal
+
+```bash
+git clone <url-repository-github-anda>
+cd <nama-folder-proyek>
+npm install
+npm run dev
+```
+
+Untuk membuat *build* produksi:
+
+```bash
+npm run build
+```
